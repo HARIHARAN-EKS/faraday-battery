@@ -78,6 +78,7 @@ qt_add_qml_module(faraday
         ui/components/MetricCard.qml
         ui/pages/DashboardPage.qml
         ui/pages/MonitorPage.qml
+        ui/pages/HistoryPage.qml
         ui/pages/PlaceholderPage.qml
 )
 

@@ -617,6 +617,126 @@ QVariantMap BatteryModel::liveTrend() const
     return result;
 }
 
+QVariantList BatteryModel::capacityHistoryList() const
+{
+    // Merge DB rows (past ingests) with the fresh report, deduplicated on
+    // (start date, source). QMap keeps them date-sorted.
+    QMap<QString, QVariantMap> merged;
+
+    auto addPoint = [&merged](const QDate &start, const QDate &end,
+                              const QVariant &design, const QVariant &full,
+                              const QVariant &cycles, const QString &source) {
+        if (!start.isValid())
+            return;
+        const QString key = start.toString(Qt::ISODate) + QLatin1Char('|') + source;
+        QVariantMap map;
+        map.insert(QStringLiteral("dateMs"),
+                   QDateTime(start, QTime(0, 0)).toMSecsSinceEpoch());
+        map.insert(QStringLiteral("endMs"),
+                   end.isValid() ? QDateTime(end, QTime(0, 0)).toMSecsSinceEpoch()
+                                 : QVariant());
+        map.insert(QStringLiteral("designmWh"), design);
+        map.insert(QStringLiteral("fullChargemWh"), full);
+        map.insert(QStringLiteral("cycleCount"), cycles);
+        map.insert(QStringLiteral("source"), source);
+        merged.insert(key, map);
+    };
+
+    if (m_database.isOpen()) {
+        // capacityHistory() is const-safe: it only reads.
+        const auto rows = const_cast<Database &>(m_database).capacityHistory();
+        for (const CapacityHistoryRow &row : rows) {
+            addPoint(row.startDate, row.endDate,
+                     row.designmWh.has_value() ? QVariant(*row.designmWh) : QVariant(),
+                     row.fullChargemWh.has_value() ? QVariant(*row.fullChargemWh) : QVariant(),
+                     row.cycleCount.has_value() ? QVariant(*row.cycleCount) : QVariant(),
+                     row.source);
+        }
+    }
+    if (m_report.ok) {
+        for (const auto &h : m_report.history) {
+            addPoint(h.start.date(), h.end.date(),
+                     h.designCapacitymWh.has_value() ? QVariant(*h.designCapacitymWh)
+                                                     : QVariant(),
+                     h.fullChargeCapacitymWh.has_value() ? QVariant(*h.fullChargeCapacitymWh)
+                                                         : QVariant(),
+                     h.cycleCount.has_value() ? QVariant(*h.cycleCount) : QVariant(),
+                     QStringLiteral("powercfg"));
+        }
+    }
+
+    QVariantList list;
+    for (auto it = merged.constBegin(); it != merged.constEnd(); ++it)
+        list.append(it.value());
+    return list;
+}
+
+QVariantList BatteryModel::usageLog(int maxEntries) const
+{
+    QVariantList list;
+    if (!m_report.ok)
+        return list;
+
+    const int total = m_report.usage.size();
+    const int first = qMax(0, total - qMax(1, maxEntries));
+    for (int i = total - 1; i >= first; --i) { // newest first
+        const auto &e = m_report.usage.at(i);
+        QVariantMap map;
+        map.insert(QStringLiteral("tsMs"), e.timestamp.toMSecsSinceEpoch());
+        map.insert(QStringLiteral("type"), e.entryType);
+        map.insert(QStringLiteral("ac"), e.ac);
+        map.insert(QStringLiteral("durationSec"), e.duration100ns / 10000000ll);
+        map.insert(QStringLiteral("deltamWh"),
+                   e.dischargemWh.has_value() ? QVariant(-*e.dischargemWh) : QVariant());
+        double pct = -1;
+        if (e.chargeCapacitymWh.has_value() && e.fullChargeCapacitymWh.has_value()
+            && *e.fullChargeCapacitymWh > 0) {
+            pct = 100.0 * static_cast<double>(*e.chargeCapacitymWh)
+                        / static_cast<double>(*e.fullChargeCapacitymWh);
+        }
+        map.insert(QStringLiteral("percent"), pct);
+        list.append(map);
+    }
+    return list;
+}
+
+QVariantMap BatteryModel::degradationInfo() const
+{
+    QVariantMap result;
+    result.insert(QStringLiteral("valid"), false);
+
+    QList<QPair<QDate, double>> history;
+    const QVariantList points = capacityHistoryList();
+    for (const QVariant &v : points) {
+        const QVariantMap m = v.toMap();
+        const QVariant full = m.value(QStringLiteral("fullChargemWh"));
+        if (!full.isValid() || full.toDouble() <= 0)
+            continue;
+        history.append({ QDateTime::fromMSecsSinceEpoch(
+                             m.value(QStringLiteral("dateMs")).toLongLong()).date(),
+                         full.toDouble() });
+    }
+    if (history.size() < 3)
+        return result;
+
+    const metrics::RegressionResult fit = metrics::degradationCurve(history);
+    if (!fit.valid)
+        return result;
+
+    result.insert(QStringLiteral("valid"), true);
+    result.insert(QStringLiteral("slopeMWhPerDay"), fit.slope);
+    result.insert(QStringLiteral("r2"), fit.r2);
+    const qint64 design = designCapacitymWh();
+    if (design > 0) {
+        const auto eol = metrics::endOfLifeProjection(history,
+                                                      static_cast<double>(design));
+        if (eol.has_value())
+            result.insert(QStringLiteral("eolDate"),
+                          eol->toString(QStringLiteral("MMMM yyyy")));
+    }
+    return result;
+}
+
 void BatteryModel::resetSessionOrigin()
 {
     m_sessionOrigin = QDateTime::currentDateTime();

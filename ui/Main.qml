@@ -148,7 +148,7 @@ ApplicationWindow {
 
             DashboardPage { }
             MonitorPage { }
-            PlaceholderPage { title: qsTr("History & timeline") }
+            HistoryPage { }
             PlaceholderPage { title: qsTr("Alerts & thresholds") }
             PlaceholderPage { title: qsTr("Calibration & reports") }
             PlaceholderPage { title: qsTr("Settings") }

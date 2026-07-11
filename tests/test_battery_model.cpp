@@ -226,6 +226,70 @@ private slots:
                      .value(QStringLiteral("critical")).toBool());
     }
 
+    void historyAndUsageFromReport()
+    {
+        BatteryModel model;
+        QVERIFY(model.capacityHistoryList().isEmpty());
+        QVERIFY(model.usageLog().isEmpty());
+        QVERIFY(!model.degradationInfo().value(QStringLiteral("valid")).toBool());
+
+        model.applySnapshot(chargingSnapshot());
+
+        PowercfgReportData report;
+        report.ok = true;
+        for (int i = 0; i < 6; ++i) {
+            PowercfgReportData::HistoryEntry h;
+            h.start = QDateTime(QDate(2026, 1, 1).addDays(i * 30), QTime(0, 0));
+            h.end = h.start.addDays(7);
+            h.designCapacitymWh = 42401;
+            h.fullChargeCapacitymWh = 42401 - i * 400; // steady decline
+            h.cycleCount = 30 + i;
+            report.history.append(h);
+        }
+        PowercfgReportData::UsageEntry u;
+        u.timestamp = QDateTime(QDate(2026, 7, 1), QTime(9, 0));
+        u.entryType = QStringLiteral("Active");
+        u.ac = false;
+        u.dischargemWh = 1200;
+        u.duration100ns = 36000000000ll;
+        u.chargeCapacitymWh = 30000;
+        u.fullChargeCapacitymWh = 40000;
+        report.usage.append(u);
+        PowercfgReportData::UsageEntry u2 = u;
+        u2.timestamp = u.timestamp.addSecs(3600);
+        u2.ac = true;
+        report.usage.append(u2);
+        model.applyReport(report);
+
+        const QVariantList hist = model.capacityHistoryList();
+        QCOMPARE(hist.size(), 6);
+        QCOMPARE(hist.first().toMap().value(QStringLiteral("fullChargemWh")).toLongLong(),
+                 qint64(42401));
+        QCOMPARE(hist.last().toMap().value(QStringLiteral("fullChargemWh")).toLongLong(),
+                 qint64(42401 - 5 * 400));
+        QCOMPARE(hist.first().toMap().value(QStringLiteral("source")).toString(),
+                 QStringLiteral("powercfg"));
+
+        const QVariantList usage = model.usageLog();
+        QCOMPARE(usage.size(), 2);
+        // Newest first
+        QVERIFY(usage.first().toMap().value(QStringLiteral("ac")).toBool());
+        QCOMPARE(usage.last().toMap().value(QStringLiteral("deltamWh")).toLongLong(),
+                 qint64(-1200));
+        QCOMPARE(usage.last().toMap().value(QStringLiteral("durationSec")).toLongLong(),
+                 qint64(3600));
+        QCOMPARE(usage.last().toMap().value(QStringLiteral("percent")).toDouble(), 75.0);
+
+        const QVariantMap degradation = model.degradationInfo();
+        QVERIFY(degradation.value(QStringLiteral("valid")).toBool());
+        // 400 mWh per 30 days ≈ -13.3 mWh/day
+        QVERIFY(qAbs(degradation.value(QStringLiteral("slopeMWhPerDay")).toDouble() + 13.3) < 0.2);
+        QVERIFY(degradation.contains(QStringLiteral("eolDate")));
+
+        // usageLog honours maxEntries
+        QCOMPARE(model.usageLog(1).size(), 1);
+    }
+
     void durationFormatting()
     {
         BatteryModel model;

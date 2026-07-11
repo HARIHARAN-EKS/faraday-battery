@@ -115,6 +115,11 @@ public:
     // charge/discharge state. Keys: valid, slopePctPerHour, lastT, lastY.
     Q_INVOKABLE QVariantMap liveTrend() const;
 
+    // History & timeline (Phase 6)
+    Q_INVOKABLE QVariantList capacityHistoryList() const;
+    Q_INVOKABLE QVariantList usageLog(int maxEntries = 200) const;
+    Q_INVOKABLE QVariantMap degradationInfo() const;
+
     QString theme() const;
     void setTheme(const QString &theme);
     int sampleIntervalSec() const;

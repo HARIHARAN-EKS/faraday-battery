@@ -24,6 +24,29 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick)
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
 
+# ---------------------------------------------------------------------------
+# faradaylib: acquisition + core logic, shared by the app and the tests
+# ---------------------------------------------------------------------------
+qt_add_library(faradaylib STATIC
+    src/acquisition/BatteryTypes.h
+    src/acquisition/WmiClient.h
+    src/acquisition/WmiClient.cpp
+    src/acquisition/BatteryReader.h
+    src/acquisition/BatteryReader.cpp
+    src/acquisition/PowercfgReport.h
+    src/acquisition/PowercfgReport.cpp
+)
+target_include_directories(faradaylib PUBLIC src)
+target_link_libraries(faradaylib PUBLIC
+    Qt6::Core
+    ole32
+    oleaut32
+    wbemuuid
+)
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
 qt_add_executable(faraday
     src/main.cpp
 )
@@ -40,7 +63,7 @@ set_target_properties(faraday PROPERTIES
 )
 
 target_link_libraries(faraday PRIVATE
-    Qt6::Core
+    faradaylib
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick

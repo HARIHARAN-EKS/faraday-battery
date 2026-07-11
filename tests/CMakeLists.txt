@@ -1,7 +1,12 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
 
-qt_add_executable(test_scaffold
-    test_scaffold.cpp
-)
-target_link_libraries(test_scaffold PRIVATE Qt6::Core Qt6::Test)
-add_test(NAME test_scaffold COMMAND test_scaffold)
+function(faraday_add_test NAME)
+    qt_add_executable(${NAME} ${NAME}.cpp ${ARGN})
+    target_link_libraries(${NAME} PRIVATE faradaylib Qt6::Core Qt6::Test)
+    add_test(NAME ${NAME} COMMAND ${NAME})
+endfunction()
+
+faraday_add_test(test_scaffold)
+faraday_add_test(test_powercfg_parser PowercfgFixture.h PowercfgFixture.cpp)
+faraday_add_test(test_wmi_client)
+faraday_add_test(test_battery_reader)

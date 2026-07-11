@@ -2,10 +2,13 @@
 
 #include "app/AlertManager.h"
 #include "app/Autostart.h"
+#include "app/Calibration.h"
 #include "app/ChargeCap.h"
+#include "app/Exporter.h"
 #include "app/Sampler.h"
 #include "core/Metrics.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QPointer>
 #include <QStandardPaths>
@@ -38,6 +41,7 @@ BatteryModel::BatteryModel(QObject *parent)
     : QObject(parent)
 {
     qRegisterMetaType<BatterySnapshot>();
+    m_calibration = new Calibration(this);
 }
 
 BatteryModel::~BatteryModel()
@@ -135,6 +139,9 @@ void BatteryModel::applySnapshot(const BatterySnapshot &snapshot)
     }
 
     appendLivePoint(snapshot);
+
+    if (m_calibration && snapshot.batteryPresent)
+        m_calibration->update(chargePercent(), onAcPower(), snapshot.timestamp);
 
     if (m_alerts && snapshot.batteryPresent) {
         AlertInput input;
@@ -820,6 +827,128 @@ QString BatteryModel::tryToggleChargeCap(bool enable)
     if (ChargeCap::setEnabled(enable, &error))
         return tr("Charge cap updated.");
     return error;
+}
+
+QObject *BatteryModel::calibrationObject() const
+{
+    return m_calibration;
+}
+
+double BatteryModel::calibrationDrift() const
+{
+    const BatteryDevice *dev = primary();
+    if (!dev)
+        return 0.0;
+    return metrics::calibrationDriftPercent(dev->estimatedChargeRemainingPct,
+                                            dev->remainingCapacitymWh,
+                                            dev->fullChargedCapacitymWh)
+        .value_or(0.0);
+}
+
+bool BatteryModel::calibrationDriftKnown() const
+{
+    const BatteryDevice *dev = primary();
+    if (!dev)
+        return false;
+    return metrics::calibrationDriftPercent(dev->estimatedChargeRemainingPct,
+                                            dev->remainingCapacitymWh,
+                                            dev->fullChargedCapacitymWh)
+        .has_value();
+}
+
+bool BatteryModel::calibrationRecommended() const
+{
+    return calibrationDriftKnown()
+           && Calibration::driftIndicatesCalibration(calibrationDrift());
+}
+
+QString BatteryModel::exportDir() const
+{
+    if (!m_exportDirOverride.isEmpty())
+        return m_exportDirOverride;
+    const QString docs =
+        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    return QDir(docs).filePath(QStringLiteral("Faraday exports"));
+}
+
+QString BatteryModel::exportSamplesCsv(int days)
+{
+    m_lastExportError.clear();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QList<SampleRow> samples = const_cast<Database &>(m_database)
+        .samplesBetween(now - qint64(qMax(1, days)) * 86400000ll, now);
+    const QString path = QDir(exportDir()).filePath(
+        QStringLiteral("faraday_samples_%1.csv")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))));
+    if (!Exporter::exportCsv(samples, path, &m_lastExportError))
+        return QString();
+    return path;
+}
+
+QString BatteryModel::exportSamplesJson(int days)
+{
+    m_lastExportError.clear();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QList<SampleRow> samples = const_cast<Database &>(m_database)
+        .samplesBetween(now - qint64(qMax(1, days)) * 86400000ll, now);
+    const QString path = QDir(exportDir()).filePath(
+        QStringLiteral("faraday_samples_%1.json")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))));
+    if (!Exporter::exportJson(samples, path, &m_lastExportError))
+        return QString();
+    return path;
+}
+
+QString BatteryModel::exportHtmlReport()
+{
+    m_lastExportError.clear();
+
+    ReportInput input;
+    input.appVersion = QCoreApplication::applicationVersion();
+    input.generatedAt = QDateTime::currentDateTime();
+    const BatteryDevice *dev = primary();
+    if (dev) {
+        input.batteryName = dev->name;
+        input.manufacturer = dev->manufacturer;
+        input.chemistry = dev->chemistry;
+        input.serialNumber = dev->serialNumber;
+    }
+    input.healthPercent = healthPercent();
+    input.wearPercent = wearPercent();
+    input.cycleCount = cycleCount();
+    input.designmWh = designCapacitymWh();
+    input.fullChargemWh = fullChargeCapacitymWh();
+    input.gradeName = gradeName();
+    input.gradeColor = gradeColor();
+    input.verdictHeadline = verdictHeadline();
+    input.verdictDetails = verdictDetails();
+    input.insights = m_habitInsights;
+
+    const QVariantList points = capacityHistoryList();
+    for (const QVariant &v : points) {
+        const QVariantMap m = v.toMap();
+        CapacityHistoryRow row;
+        row.startDate = QDateTime::fromMSecsSinceEpoch(
+                            m.value(QStringLiteral("dateMs")).toLongLong()).date();
+        const QVariant full = m.value(QStringLiteral("fullChargemWh"));
+        if (full.isValid())
+            row.fullChargemWh = full.toLongLong();
+        const QVariant design = m.value(QStringLiteral("designmWh"));
+        if (design.isValid())
+            row.designmWh = design.toLongLong();
+        const QVariant cycles = m.value(QStringLiteral("cycleCount"));
+        if (cycles.isValid())
+            row.cycleCount = cycles.toLongLong();
+        row.source = m.value(QStringLiteral("source")).toString();
+        input.history.append(row);
+    }
+
+    const QString path = QDir(exportDir()).filePath(
+        QStringLiteral("faraday_health_report_%1.html")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"))));
+    if (!Exporter::writeHtmlReport(input, path, &m_lastExportError))
+        return QString();
+    return path;
 }
 
 void BatteryModel::resetSessionOrigin()

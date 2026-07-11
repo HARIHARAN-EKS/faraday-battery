@@ -166,7 +166,7 @@ ApplicationWindow {
             MonitorPage { }
             HistoryPage { }
             AlertsPage { }
-            PlaceholderPage { title: qsTr("Calibration & reports") }
+            CalibrationPage { }
             PlaceholderPage { title: qsTr("Settings") }
         }
     }

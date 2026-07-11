@@ -73,6 +73,12 @@ class BatteryModel : public QObject
     Q_PROPERTY(bool chargeCapSupported READ chargeCapSupported NOTIFY chargeCapChanged)
     Q_PROPERTY(QString chargeCapDetail READ chargeCapDetail NOTIFY chargeCapChanged)
 
+    // Calibration & reports (Phase 8)
+    Q_PROPERTY(QObject *calibration READ calibrationObject CONSTANT)
+    Q_PROPERTY(double calibrationDrift READ calibrationDrift NOTIFY snapshotChanged)
+    Q_PROPERTY(bool calibrationDriftKnown READ calibrationDriftKnown NOTIFY snapshotChanged)
+    Q_PROPERTY(bool calibrationRecommended READ calibrationRecommended NOTIFY snapshotChanged)
+
 public:
     explicit BatteryModel(QObject *parent = nullptr);
     ~BatteryModel() override;
@@ -140,6 +146,20 @@ public:
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
     Q_INVOKABLE QString tryToggleChargeCap(bool enable);
 
+    QObject *calibrationObject() const;
+    double calibrationDrift() const;
+    bool calibrationDriftKnown() const;
+    bool calibrationRecommended() const;
+
+    // Exports: write into <Documents>/Faraday exports (or exportDir when
+    // set for tests). Return the written file path, or empty on failure
+    // (details land in lastExportError).
+    Q_INVOKABLE QString exportSamplesCsv(int days = 30);
+    Q_INVOKABLE QString exportSamplesJson(int days = 30);
+    Q_INVOKABLE QString exportHtmlReport();
+    Q_INVOKABLE QString lastExportError() const { return m_lastExportError; }
+    void setExportDirOverride(const QString &dir) { m_exportDirOverride = dir; }
+
     Q_INVOKABLE void resetSessionOrigin();
     Q_INVOKABLE void sampleNow();
     Q_INVOKABLE QString formatDuration(qint64 seconds) const;
@@ -169,11 +189,16 @@ private:
 
     void probeChargeCapAsync();
 
+    QString exportDir() const;
+
     QThread m_workerThread;
     Sampler *m_sampler = nullptr;
     class AlertManager *m_alerts = nullptr;
+    class Calibration *m_calibration = nullptr;
     bool m_chargeCapSupported = false;
     QString m_chargeCapDetail;
+    QString m_lastExportError;
+    QString m_exportDirOverride;
 
     Settings m_settings;
     Database m_database;

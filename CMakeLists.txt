@@ -55,6 +55,10 @@ qt_add_library(faradaylib STATIC
     src/app/ChargeCap.cpp
     src/app/TrayManager.h
     src/app/TrayManager.cpp
+    src/app/Calibration.h
+    src/app/Calibration.cpp
+    src/app/Exporter.h
+    src/app/Exporter.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC
@@ -90,6 +94,7 @@ qt_add_qml_module(faraday
         ui/pages/MonitorPage.qml
         ui/pages/HistoryPage.qml
         ui/pages/AlertsPage.qml
+        ui/pages/CalibrationPage.qml
         ui/pages/PlaceholderPage.qml
 )
 

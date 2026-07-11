@@ -77,6 +77,7 @@ qt_add_qml_module(faraday
         ui/components/HealthRing.qml
         ui/components/MetricCard.qml
         ui/pages/DashboardPage.qml
+        ui/pages/MonitorPage.qml
         ui/pages/PlaceholderPage.qml
 )
 

@@ -159,6 +159,73 @@ private slots:
         QCOMPARE(model.batteries().size(), 2);
     }
 
+    void liveTrendRegression()
+    {
+        BatteryModel model;
+        QVERIFY(!model.liveTrend().value(QStringLiteral("valid")).toBool()); // < 3 points
+
+        // Three discharging snapshots, 1 %/sample drop; timestamps differ.
+        for (int i = 0; i < 4; ++i) {
+            BatterySnapshot snap = chargingSnapshot();
+            snap.timestamp = QDateTime::currentDateTime().addSecs(i * 60);
+            snap.batteries[0].charging = false;
+            snap.batteries[0].discharging = true;
+            snap.batteries[0].chargeRatemW = 0;
+            snap.batteries[0].dischargeRatemW = 8000;
+            snap.batteries[0].remainingCapacitymWh = 32288 - quint32(i) * 424;
+            model.applySnapshot(snap);
+        }
+        const QVariantMap trend = model.liveTrend();
+        QVERIFY(trend.value(QStringLiteral("valid")).toBool());
+        // ~1 % per 60 s = ~-60 %/h
+        const double slope = trend.value(QStringLiteral("slopePctPerHour")).toDouble();
+        QVERIFY(slope < -50 && slope > -70);
+        QVERIFY(trend.contains(QStringLiteral("lastT")));
+        QVERIFY(trend.contains(QStringLiteral("lastY")));
+    }
+
+    void expectedDischargeSlope()
+    {
+        BatteryModel model;
+        QCOMPARE(model.expectedDischargeSlopePctPerHour(), 0.0); // no report yet
+
+        model.applySnapshot(chargingSnapshot());
+        PowercfgReportData report;
+        report.ok = true;
+        PowercfgReportData::UsageEntry entry;
+        entry.timestamp = QDateTime::currentDateTime();
+        entry.entryType = QStringLiteral("Active");
+        entry.ac = false;
+        entry.dischargemWh = 8480; // 8480 mWh over 1 h -> 8.48 W
+        entry.duration100ns = 36000000000ll;
+        entry.chargeCapacitymWh = 30000;
+        entry.fullChargeCapacitymWh = 42401;
+        report.usage.append(entry);
+        model.applyReport(report);
+
+        QVERIFY(qAbs(model.expectedDrainW() - 8.48) < 0.01);
+        // -100 * 8480 / 42401 = -20.0 %/h
+        QVERIFY(qAbs(model.expectedDischargeSlopePctPerHour() + 20.0) < 0.05);
+    }
+
+    void criticalMarkerFlag()
+    {
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot();
+        snap.batteries[0].charging = false;
+        snap.batteries[0].discharging = true;
+        snap.batteries[0].chargeRatemW = 0;
+        snap.batteries[0].dischargeRatemW = 40000; // 40 W draw > 25 W default
+        model.applySnapshot(snap);
+        QVERIFY(model.liveSeries().last().toMap()
+                    .value(QStringLiteral("critical")).toBool());
+
+        BatterySnapshot calm = chargingSnapshot();
+        model.applySnapshot(calm); // charging: never critical
+        QVERIFY(!model.liveSeries().last().toMap()
+                     .value(QStringLiteral("critical")).toBool());
+    }
+
     void durationFormatting()
     {
         BatteryModel model;

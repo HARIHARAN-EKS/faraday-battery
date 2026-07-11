@@ -147,7 +147,7 @@ ApplicationWindow {
             currentIndex: 0
 
             DashboardPage { }
-            PlaceholderPage { title: qsTr("Live monitor") }
+            MonitorPage { }
             PlaceholderPage { title: qsTr("History & timeline") }
             PlaceholderPage { title: qsTr("Alerts & thresholds") }
             PlaceholderPage { title: qsTr("Calibration & reports") }

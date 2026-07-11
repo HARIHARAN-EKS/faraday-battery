@@ -147,6 +147,15 @@ void BatteryModel::appendLivePoint(const BatterySnapshot &snapshot)
     point.insert(QStringLiteral("remainingmWh"), remainingCapacitymWh());
     point.insert(QStringLiteral("powerW"), powerKnown() ? netPowerW() : 0.0);
     point.insert(QStringLiteral("charging"), charging());
+
+    // Critical-discharge marker: firmware critical flag, or a draw far above
+    // the typical active drain from the usage history (min 25 W).
+    const BatteryDevice *dev = primary();
+    const double criticalDrawW =
+        qMax(25.0, m_expectedDrainW > 0 ? m_expectedDrainW * 2.0 : 25.0);
+    const bool critical = (dev && dev->critical.value_or(false))
+                          || (!charging() && powerKnown() && netPowerW() < -criticalDrawW);
+    point.insert(QStringLiteral("critical"), critical);
     m_liveSeries.append(point);
     while (m_liveSeries.size() > kMaxLivePoints)
         m_liveSeries.removeFirst();
@@ -566,6 +575,46 @@ void BatteryModel::setSampleIntervalSec(int seconds)
                                   Q_ARG(int, clamped));
     }
     emit settingsChanged();
+}
+
+double BatteryModel::expectedDischargeSlopePctPerHour() const
+{
+    const qint64 fcc = fullChargeCapacitymWh();
+    if (m_expectedDrainW <= 0.0 || fcc <= 0)
+        return 0.0;
+    return -100.0 * (m_expectedDrainW * 1000.0) / static_cast<double>(fcc);
+}
+
+QVariantMap BatteryModel::liveTrend() const
+{
+    QVariantMap result;
+    result.insert(QStringLiteral("valid"), false);
+    if (m_liveSeries.size() < 3)
+        return result;
+
+    const bool nowCharging = m_liveSeries.last().toMap()
+                                 .value(QStringLiteral("charging")).toBool();
+    QVector<QPointF> pts;
+    pts.reserve(m_liveSeries.size());
+    for (const QVariant &v : m_liveSeries) {
+        const QVariantMap m = v.toMap();
+        const double pct = m.value(QStringLiteral("percent")).toDouble();
+        if (pct < 0)
+            continue;
+        if (m.value(QStringLiteral("charging")).toBool() != nowCharging)
+            continue;
+        pts.append(QPointF(m.value(QStringLiteral("t")).toDouble(), pct));
+    }
+    const metrics::RegressionResult fit = metrics::linearRegression(pts);
+    if (!fit.valid)
+        return result;
+
+    const double lastT = pts.last().x();
+    result.insert(QStringLiteral("valid"), true);
+    result.insert(QStringLiteral("slopePctPerHour"), fit.slope * 3600.0);
+    result.insert(QStringLiteral("lastT"), lastT);
+    result.insert(QStringLiteral("lastY"), fit.slope * lastT + fit.intercept);
+    return result;
 }
 
 void BatteryModel::resetSessionOrigin()

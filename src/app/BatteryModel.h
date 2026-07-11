@@ -60,6 +60,8 @@ class BatteryModel : public QObject
     // Live monitor series
     Q_PROPERTY(QVariantList liveSeries READ liveSeries NOTIFY liveSeriesChanged)
     Q_PROPERTY(double expectedDrainW READ expectedDrainW NOTIFY reportChanged)
+    Q_PROPERTY(double expectedDischargeSlopePctPerHour READ expectedDischargeSlopePctPerHour
+                   NOTIFY reportChanged)
 
     // Preferences
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY settingsChanged)
@@ -107,6 +109,11 @@ public:
 
     QVariantList liveSeries() const { return m_liveSeries; }
     double expectedDrainW() const { return m_expectedDrainW; }
+    double expectedDischargeSlopePctPerHour() const;
+
+    // Regression over this session's samples matching the current
+    // charge/discharge state. Keys: valid, slopePctPerHour, lastT, lastY.
+    Q_INVOKABLE QVariantMap liveTrend() const;
 
     QString theme() const;
     void setTheme(const QString &theme);

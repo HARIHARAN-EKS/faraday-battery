@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QMetaType>
 #include <QString>
 #include <QStringList>
 #include <optional>
@@ -58,3 +59,5 @@ struct BatterySnapshot
 };
 
 } // namespace faraday
+
+Q_DECLARE_METATYPE(faraday::BatterySnapshot)

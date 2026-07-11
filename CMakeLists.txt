@@ -19,7 +19,7 @@ else()
     add_compile_options(-Wall -Wextra -Werror)
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Sql)
 
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
@@ -39,10 +39,17 @@ qt_add_library(faradaylib STATIC
     src/core/Metrics.cpp
     src/core/HealthVerdict.h
     src/core/HealthVerdict.cpp
+    src/data/Database.h
+    src/data/Database.cpp
+    src/data/Settings.h
+    src/data/Settings.cpp
+    src/app/Sampler.h
+    src/app/Sampler.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC
     Qt6::Core
+    Qt6::Sql
     ole32
     oleaut32
     wbemuuid

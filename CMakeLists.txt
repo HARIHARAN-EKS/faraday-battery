@@ -35,6 +35,10 @@ qt_add_library(faradaylib STATIC
     src/acquisition/BatteryReader.cpp
     src/acquisition/PowercfgReport.h
     src/acquisition/PowercfgReport.cpp
+    src/core/Metrics.h
+    src/core/Metrics.cpp
+    src/core/HealthVerdict.h
+    src/core/HealthVerdict.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC

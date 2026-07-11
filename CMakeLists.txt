@@ -45,6 +45,8 @@ qt_add_library(faradaylib STATIC
     src/data/Settings.cpp
     src/app/Sampler.h
     src/app/Sampler.cpp
+    src/app/BatteryModel.h
+    src/app/BatteryModel.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC
@@ -62,11 +64,20 @@ qt_add_executable(faraday
     src/main.cpp
 )
 
+set_source_files_properties(ui/Theme.qml PROPERTIES
+    QT_QML_SINGLETON_TYPE TRUE
+)
+
 qt_add_qml_module(faraday
     URI Faraday
     VERSION 1.0
     QML_FILES
         ui/Main.qml
+        ui/Theme.qml
+        ui/components/HealthRing.qml
+        ui/components/MetricCard.qml
+        ui/pages/DashboardPage.qml
+        ui/pages/PlaceholderPage.qml
 )
 
 set_target_properties(faraday PROPERTIES

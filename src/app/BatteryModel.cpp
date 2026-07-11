@@ -1,0 +1,592 @@
+#include "BatteryModel.h"
+
+#include "app/Sampler.h"
+#include "core/Metrics.h"
+
+#include <QDir>
+#include <QPointer>
+#include <QStandardPaths>
+#include <QThreadPool>
+
+namespace faraday {
+
+namespace {
+
+QVariant optToVariant(const std::optional<quint32> &v)
+{
+    return v.has_value() ? QVariant(static_cast<qint64>(*v)) : QVariant();
+}
+
+QVariant optToVariant(const std::optional<qint32> &v)
+{
+    return v.has_value() ? QVariant(static_cast<qint64>(*v)) : QVariant();
+}
+
+QVariant optToVariant(const std::optional<bool> &v)
+{
+    return v.has_value() ? QVariant(*v) : QVariant();
+}
+
+const int kMaxLivePoints = 7200;
+
+} // namespace
+
+BatteryModel::BatteryModel(QObject *parent)
+    : QObject(parent)
+{
+    qRegisterMetaType<BatterySnapshot>();
+}
+
+BatteryModel::~BatteryModel()
+{
+    if (m_started) {
+        m_workerThread.quit();
+        m_workerThread.wait(5000);
+    }
+}
+
+void BatteryModel::initialize(const QString &dataDir)
+{
+    if (m_started)
+        return;
+    m_started = true;
+
+    m_dataDir = dataDir;
+    if (m_dataDir.isEmpty())
+        m_dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(m_dataDir);
+
+    m_settings = Settings(m_dataDir);
+    m_settings.load(); // falls back to defaults if missing/corrupt
+
+    if (m_database.open(QDir(m_dataDir).filePath(QStringLiteral("faraday.sqlite"))))
+        m_database.initSchema();
+
+    m_sessionOrigin = QDateTime::currentDateTime();
+    startSampler();
+    ingestReportAsync();
+    emit settingsChanged();
+}
+
+void BatteryModel::startSampler()
+{
+    m_sampler = new Sampler();
+    m_sampler->moveToThread(&m_workerThread);
+    connect(&m_workerThread, &QThread::finished, m_sampler, &QObject::deleteLater);
+    connect(m_sampler, &Sampler::snapshotReady, this, &BatteryModel::applySnapshot,
+            Qt::QueuedConnection);
+    connect(m_sampler, &Sampler::acquisitionError, this, &BatteryModel::acquisitionError,
+            Qt::QueuedConnection);
+    m_workerThread.setObjectName(QStringLiteral("faraday-sampler"));
+    m_workerThread.start();
+    QMetaObject::invokeMethod(m_sampler, "start", Qt::QueuedConnection,
+                              Q_ARG(int, m_settings.sampleIntervalSec()));
+}
+
+void BatteryModel::ingestReportAsync()
+{
+    const QString workDir = m_dataDir;
+    QPointer<BatteryModel> guard(this);
+    QThreadPool::globalInstance()->start([workDir, guard]() {
+        const PowercfgReportData data = PowercfgReport::generate(workDir);
+        if (guard) {
+            QMetaObject::invokeMethod(guard, [guard, data]() {
+                if (guard)
+                    guard->applyReport(data);
+            }, Qt::QueuedConnection);
+        }
+    });
+}
+
+void BatteryModel::applySnapshot(const BatterySnapshot &snapshot)
+{
+    m_snapshot = snapshot;
+    m_ready = true;
+
+    if (m_database.isOpen()) {
+        const qint64 nowMs = snapshot.timestamp.toMSecsSinceEpoch();
+        for (const BatteryDevice &device : snapshot.batteries)
+            m_database.upsertStatic(device, nowMs);
+        m_database.insertSample(snapshot);
+    }
+
+    appendLivePoint(snapshot);
+    emit snapshotChanged();
+}
+
+void BatteryModel::applyReport(const PowercfgReportData &report)
+{
+    m_report = report;
+    if (report.ok) {
+        if (m_database.isOpen())
+            m_database.ingestCapacityHistory(report.history);
+        m_habitInsights = HealthVerdict::chargingHabitInsights(report.usage);
+
+        const QList<metrics::StateDrain> drains = metrics::perStateDrain(report.usage);
+        m_expectedDrainW = 0.0;
+        for (const metrics::StateDrain &d : drains) {
+            if (d.state.compare(QStringLiteral("Active"), Qt::CaseInsensitive) == 0) {
+                m_expectedDrainW = d.avgDrainmW / 1000.0;
+                break;
+            }
+        }
+    }
+    emit reportChanged();
+    emit snapshotChanged(); // report can improve design capacity / cycles
+}
+
+void BatteryModel::appendLivePoint(const BatterySnapshot &snapshot)
+{
+    if (!m_sessionOrigin.isValid())
+        m_sessionOrigin = snapshot.timestamp;
+
+    QVariantMap point;
+    point.insert(QStringLiteral("t"),
+                 static_cast<double>(m_sessionOrigin.secsTo(snapshot.timestamp)));
+    point.insert(QStringLiteral("percent"), chargePercent());
+    point.insert(QStringLiteral("remainingmWh"), remainingCapacitymWh());
+    point.insert(QStringLiteral("powerW"), powerKnown() ? netPowerW() : 0.0);
+    point.insert(QStringLiteral("charging"), charging());
+    m_liveSeries.append(point);
+    while (m_liveSeries.size() > kMaxLivePoints)
+        m_liveSeries.removeFirst();
+    emit liveSeriesChanged();
+}
+
+const BatteryDevice *BatteryModel::primary() const
+{
+    if (m_snapshot.batteries.isEmpty())
+        return nullptr;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (b.fullChargedCapacitymWh.has_value() && *b.fullChargedCapacitymWh > 0)
+            return &b;
+    }
+    return &m_snapshot.batteries.first();
+}
+
+QString BatteryModel::statusText() const
+{
+    if (!m_ready)
+        return tr("Reading sensors…");
+    if (!m_snapshot.batteryPresent)
+        return tr("No battery detected");
+    const BatteryDevice *dev = primary();
+    if (!dev)
+        return tr("Unknown");
+    if (dev->charging.value_or(false))
+        return tr("Charging");
+    if (dev->discharging.value_or(false))
+        return tr("Discharging");
+    if (dev->powerOnline.value_or(false)) {
+        if (chargePercent() >= 99.5)
+            return tr("Fully charged");
+        return tr("On AC power");
+    }
+    if (dev->win32Status.has_value()) {
+        const QString s = BatteryReader::win32StatusToString(*dev->win32Status);
+        if (!s.isEmpty())
+            return s;
+    }
+    return tr("Idle");
+}
+
+bool BatteryModel::onAcPower() const
+{
+    const BatteryDevice *dev = primary();
+    return dev ? dev->powerOnline.value_or(false) : false;
+}
+
+bool BatteryModel::charging() const
+{
+    const BatteryDevice *dev = primary();
+    return dev ? dev->charging.value_or(false) : false;
+}
+
+double BatteryModel::chargePercent() const
+{
+    // Aggregate across packs when possible.
+    qint64 remaining = 0, full = 0;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (b.remainingCapacitymWh.has_value() && b.fullChargedCapacitymWh.has_value()
+            && *b.fullChargedCapacitymWh > 0) {
+            remaining += *b.remainingCapacitymWh;
+            full += *b.fullChargedCapacitymWh;
+        }
+    }
+    if (full > 0)
+        return std::clamp(100.0 * static_cast<double>(remaining) / static_cast<double>(full),
+                          0.0, 100.0);
+    const BatteryDevice *dev = primary();
+    if (dev && dev->estimatedChargeRemainingPct.has_value())
+        return static_cast<double>(*dev->estimatedChargeRemainingPct);
+    return -1.0;
+}
+
+double BatteryModel::healthPercent() const
+{
+    const qint64 full = fullChargeCapacitymWh();
+    const qint64 design = designCapacitymWh();
+    if (full <= 0 || design <= 0)
+        return -1.0;
+    return std::clamp(100.0 * static_cast<double>(full) / static_cast<double>(design),
+                      0.0, 100.0);
+}
+
+double BatteryModel::wearPercent() const
+{
+    const double health = healthPercent();
+    return health < 0 ? -1.0 : 100.0 - health;
+}
+
+int BatteryModel::cycleCount() const
+{
+    const BatteryDevice *dev = primary();
+    if (dev && dev->cycleCount.has_value())
+        return static_cast<int>(*dev->cycleCount);
+    if (m_report.ok && !m_report.batteries.isEmpty()
+        && m_report.batteries.first().cycleCount.has_value())
+        return static_cast<int>(*m_report.batteries.first().cycleCount);
+    return -1;
+}
+
+double BatteryModel::temperatureC() const
+{
+    return m_snapshot.temperatureC.value_or(-1000.0);
+}
+
+bool BatteryModel::temperatureKnown() const
+{
+    return m_snapshot.temperatureC.has_value();
+}
+
+double BatteryModel::netPowerW() const
+{
+    double total = 0.0;
+    bool known = false;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        const auto p = metrics::netPowerW(b.chargeRatemW, b.dischargeRatemW);
+        if (p.has_value()) {
+            total += *p;
+            known = true;
+        }
+    }
+    return known ? total : 0.0;
+}
+
+bool BatteryModel::powerKnown() const
+{
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (metrics::netPowerW(b.chargeRatemW, b.dischargeRatemW).has_value())
+            return true;
+    }
+    return false;
+}
+
+double BatteryModel::voltageV() const
+{
+    const BatteryDevice *dev = primary();
+    if (dev && dev->voltagemV.has_value())
+        return static_cast<double>(*dev->voltagemV) / 1000.0;
+    return -1.0;
+}
+
+qint64 BatteryModel::designCapacitymWh() const
+{
+    qint64 total = 0;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (b.designedCapacitymWh.has_value() && *b.designedCapacitymWh > 0)
+            total += *b.designedCapacitymWh;
+    }
+    if (total > 0)
+        return total;
+    if (m_report.ok) {
+        for (const auto &b : m_report.batteries)
+            total += b.designCapacitymWh.value_or(0);
+    }
+    return total > 0 ? total : -1;
+}
+
+qint64 BatteryModel::fullChargeCapacitymWh() const
+{
+    qint64 total = 0;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (b.fullChargedCapacitymWh.has_value() && *b.fullChargedCapacitymWh > 0)
+            total += *b.fullChargedCapacitymWh;
+    }
+    if (total > 0)
+        return total;
+    if (m_report.ok) {
+        for (const auto &b : m_report.batteries)
+            total += b.fullChargeCapacitymWh.value_or(0);
+    }
+    return total > 0 ? total : -1;
+}
+
+qint64 BatteryModel::remainingCapacitymWh() const
+{
+    qint64 total = 0;
+    bool known = false;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        if (b.remainingCapacitymWh.has_value()) {
+            total += *b.remainingCapacitymWh;
+            known = true;
+        }
+    }
+    return known ? total : -1;
+}
+
+QString BatteryModel::formatDuration(qint64 seconds) const
+{
+    if (seconds < 0)
+        return QString();
+    const qint64 hours = seconds / 3600;
+    const qint64 minutes = (seconds % 3600) / 60;
+    if (hours > 0)
+        return tr("%1 h %2 min").arg(hours).arg(minutes);
+    return tr("%1 min").arg(minutes);
+}
+
+QString BatteryModel::timeEstimateText() const
+{
+    const BatteryDevice *dev = primary();
+    if (!dev)
+        return QString();
+
+    if (dev->charging.value_or(false)) {
+        const auto ttf = metrics::timeToFullSec(dev->remainingCapacitymWh,
+                                                dev->fullChargedCapacitymWh,
+                                                dev->chargeRatemW);
+        if (ttf.has_value())
+            return tr("%1 to full charge").arg(formatDuration(*ttf));
+        return QString();
+    }
+
+    if (dev->discharging.value_or(false)) {
+        // Prefer the trend extrapolated from this session's samples.
+        QVector<QPointF> pts;
+        pts.reserve(m_liveSeries.size());
+        for (const QVariant &v : m_liveSeries) {
+            const QVariantMap m = v.toMap();
+            const double remaining = m.value(QStringLiteral("remainingmWh")).toDouble();
+            if (remaining > 0 && !m.value(QStringLiteral("charging")).toBool())
+                pts.append(QPointF(m.value(QStringLiteral("t")).toDouble(), remaining));
+        }
+        if (pts.size() >= 3) {
+            const auto tte = metrics::extrapolatedTimeToEmptySec(pts);
+            if (tte.has_value())
+                return tr("%1 remaining (trend)").arg(formatDuration(*tte));
+        }
+        const auto tte = metrics::timeToEmptySec(dev->remainingCapacitymWh,
+                                                 dev->dischargeRatemW);
+        if (tte.has_value())
+            return tr("%1 remaining").arg(formatDuration(*tte));
+        if (dev->estimatedRuntimeSec.has_value())
+            return tr("%1 remaining").arg(formatDuration(*dev->estimatedRuntimeSec));
+    }
+    return QString();
+}
+
+Verdict BatteryModel::currentVerdict() const
+{
+    VerdictInput input;
+    const double health = healthPercent();
+    if (health >= 0)
+        input.healthPercent = health;
+    const int cycles = cycleCount();
+    if (cycles >= 0)
+        input.cycleCount = static_cast<quint32>(cycles);
+    if (temperatureKnown())
+        input.temperatureC = temperatureC();
+
+    const BatteryDevice *dev = primary();
+    if (dev) {
+        input.calibrationDriftPercent = metrics::calibrationDriftPercent(
+            dev->estimatedChargeRemainingPct, dev->remainingCapacitymWh,
+            dev->fullChargedCapacitymWh);
+    }
+
+    if (m_report.ok && m_report.history.size() >= 3) {
+        QList<QPair<QDate, double>> history;
+        for (const auto &h : m_report.history) {
+            if (h.fullChargeCapacitymWh.has_value() && *h.fullChargeCapacitymWh > 0)
+                history.append({ h.start.date(),
+                                 static_cast<double>(*h.fullChargeCapacitymWh) });
+        }
+        input.degradation = metrics::degradationCurve(history);
+        const qint64 design = designCapacitymWh();
+        if (design > 0)
+            input.endOfLife = metrics::endOfLifeProjection(history,
+                                                           static_cast<double>(design));
+    }
+    return HealthVerdict::generate(input);
+}
+
+QString BatteryModel::gradeName() const
+{
+    return HealthVerdict::gradeName(HealthVerdict::gradeForHealth(
+        healthPercent() >= 0 ? std::optional<double>(healthPercent()) : std::nullopt));
+}
+
+QString BatteryModel::gradeColor() const
+{
+    switch (HealthVerdict::gradeForHealth(
+        healthPercent() >= 0 ? std::optional<double>(healthPercent()) : std::nullopt)) {
+    case HealthGrade::Excellent:   return QStringLiteral("#3fb950");
+    case HealthGrade::Good:        return QStringLiteral("#7ee787");
+    case HealthGrade::Fair:        return QStringLiteral("#d29922");
+    case HealthGrade::Worn:        return QStringLiteral("#f0883e");
+    case HealthGrade::ReplaceSoon: return QStringLiteral("#f85149");
+    case HealthGrade::Unknown:     break;
+    }
+    return QStringLiteral("#8b949e");
+}
+
+QString BatteryModel::verdictHeadline() const
+{
+    return currentVerdict().headline;
+}
+
+QStringList BatteryModel::verdictDetails() const
+{
+    return currentVerdict().details;
+}
+
+QVariantList BatteryModel::batteries() const
+{
+    QVariantList list;
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        QVariantMap map;
+        map.insert(QStringLiteral("instanceName"), b.instanceName);
+        map.insert(QStringLiteral("name"), b.name);
+        map.insert(QStringLiteral("manufacturer"), b.manufacturer);
+        map.insert(QStringLiteral("serialNumber"), b.serialNumber);
+        map.insert(QStringLiteral("chemistry"), b.chemistry);
+        map.insert(QStringLiteral("designCapacitymWh"), optToVariant(b.designedCapacitymWh));
+        map.insert(QStringLiteral("fullChargeCapacitymWh"),
+                   optToVariant(b.fullChargedCapacitymWh));
+        map.insert(QStringLiteral("remainingmWh"), optToVariant(b.remainingCapacitymWh));
+        map.insert(QStringLiteral("cycleCount"), optToVariant(b.cycleCount));
+        map.insert(QStringLiteral("voltagemV"), optToVariant(b.voltagemV));
+        map.insert(QStringLiteral("chargeRatemW"), optToVariant(b.chargeRatemW));
+        map.insert(QStringLiteral("dischargeRatemW"), optToVariant(b.dischargeRatemW));
+        map.insert(QStringLiteral("charging"), optToVariant(b.charging));
+        map.insert(QStringLiteral("discharging"), optToVariant(b.discharging));
+        map.insert(QStringLiteral("powerOnline"), optToVariant(b.powerOnline));
+        list.append(map);
+    }
+    return list;
+}
+
+QVariantList BatteryModel::rawStreams() const
+{
+    QVariantList list;
+    auto add = [&list](const QString &source, const QString &field, const QVariant &value) {
+        QVariantMap map;
+        map.insert(QStringLiteral("source"), source);
+        map.insert(QStringLiteral("field"), field);
+        map.insert(QStringLiteral("value"),
+                   value.isValid() ? value.toString() : QStringLiteral("—"));
+        list.append(map);
+    };
+
+    for (const BatteryDevice &b : m_snapshot.batteries) {
+        const QString src = b.instanceName;
+        add(src, QStringLiteral("RemainingCapacity (mWh)"), optToVariant(b.remainingCapacitymWh));
+        add(src, QStringLiteral("FullChargedCapacity (mWh)"),
+            optToVariant(b.fullChargedCapacitymWh));
+        add(src, QStringLiteral("DesignedCapacity (mWh)"), optToVariant(b.designedCapacitymWh));
+        add(src, QStringLiteral("ChargeRate (mW)"), optToVariant(b.chargeRatemW));
+        add(src, QStringLiteral("DischargeRate (mW)"), optToVariant(b.dischargeRatemW));
+        add(src, QStringLiteral("Voltage (mV)"), optToVariant(b.voltagemV));
+        add(src, QStringLiteral("CycleCount"), optToVariant(b.cycleCount));
+        add(src, QStringLiteral("PowerOnline"), optToVariant(b.powerOnline));
+        add(src, QStringLiteral("Charging"), optToVariant(b.charging));
+        add(src, QStringLiteral("Discharging"), optToVariant(b.discharging));
+        add(src, QStringLiteral("Critical"), optToVariant(b.critical));
+        add(src, QStringLiteral("EstimatedRuntime (s)"), optToVariant(b.estimatedRuntimeSec));
+        add(src, QStringLiteral("Win32 BatteryStatus"),
+            b.win32Status.has_value()
+                ? QVariant(QStringLiteral("%1 (%2)").arg(*b.win32Status)
+                               .arg(BatteryReader::win32StatusToString(*b.win32Status)))
+                : QVariant());
+        add(src, QStringLiteral("EstimatedChargeRemaining (%)"),
+            b.estimatedChargeRemainingPct.has_value()
+                ? QVariant(*b.estimatedChargeRemainingPct) : QVariant());
+    }
+    for (const ThermalZone &zone : m_snapshot.thermalZones) {
+        add(zone.instanceName, QStringLiteral("Temperature (°C)"),
+            zone.valid ? QVariant(QString::number(zone.celsius, 'f', 1))
+                       : QVariant(QStringLiteral("stub/invalid")));
+    }
+    return list;
+}
+
+QVariantList BatteryModel::thermalZones() const
+{
+    QVariantList list;
+    for (const ThermalZone &zone : m_snapshot.thermalZones) {
+        QVariantMap map;
+        map.insert(QStringLiteral("instanceName"), zone.instanceName);
+        map.insert(QStringLiteral("celsius"), zone.celsius);
+        map.insert(QStringLiteral("valid"), zone.valid);
+        map.insert(QStringLiteral("isBatteryZone"), zone.isBatteryZone);
+        list.append(map);
+    }
+    return list;
+}
+
+QString BatteryModel::theme() const
+{
+    return m_settings.theme();
+}
+
+void BatteryModel::setTheme(const QString &theme)
+{
+    if (theme == m_settings.theme())
+        return;
+    m_settings.setValue(QStringLiteral("theme"), theme);
+    m_settings.save();
+    emit settingsChanged();
+}
+
+int BatteryModel::sampleIntervalSec() const
+{
+    return m_settings.sampleIntervalSec();
+}
+
+void BatteryModel::setSampleIntervalSec(int seconds)
+{
+    const int clamped = qBound(1, seconds, 3600);
+    if (clamped == m_settings.sampleIntervalSec())
+        return;
+    m_settings.setValue(QStringLiteral("sampleIntervalSec"), clamped);
+    m_settings.save();
+    if (m_sampler) {
+        QMetaObject::invokeMethod(m_sampler, "setIntervalSec", Qt::QueuedConnection,
+                                  Q_ARG(int, clamped));
+    }
+    emit settingsChanged();
+}
+
+void BatteryModel::resetSessionOrigin()
+{
+    m_sessionOrigin = QDateTime::currentDateTime();
+    m_liveSeries.clear();
+    if (m_database.isOpen()) {
+        const BatteryDevice *dev = primary();
+        std::optional<qint64> origin;
+        if (dev && dev->remainingCapacitymWh.has_value())
+            origin = static_cast<qint64>(*dev->remainingCapacitymWh);
+        m_database.beginSession(m_sessionOrigin.toMSecsSinceEpoch(), origin,
+                                QStringLiteral("session origin reset"));
+    }
+    emit liveSeriesChanged();
+}
+
+void BatteryModel::sampleNow()
+{
+    if (m_sampler)
+        QMetaObject::invokeMethod(m_sampler, "sampleNow", Qt::QueuedConnection);
+}
+
+} // namespace faraday

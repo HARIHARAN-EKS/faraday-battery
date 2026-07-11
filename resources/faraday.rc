@@ -1,0 +1,40 @@
+// Faraday version-info resource, application icon and asInvoker manifest.
+#include <winver.h>
+
+#define VER_FILEVERSION             1,0,0,0
+#define VER_FILEVERSION_STR         "1.0.0.0\0"
+#define VER_PRODUCTVERSION          1,0,0,0
+#define VER_PRODUCTVERSION_STR      "1.0.0\0"
+
+IDI_ICON1 ICON "faraday.ico"
+
+1 24 "app.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VER_FILEVERSION
+PRODUCTVERSION  VER_PRODUCTVERSION
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "Faraday Project\0"
+            VALUE "FileDescription",  "Faraday - Battery Intelligence Suite\0"
+            VALUE "FileVersion",      VER_FILEVERSION_STR
+            VALUE "InternalName",     "faraday\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Faraday Project. MIT License.\0"
+            VALUE "OriginalFilename", "faraday.exe\0"
+            VALUE "ProductName",      "Faraday Battery Intelligence Suite\0"
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END

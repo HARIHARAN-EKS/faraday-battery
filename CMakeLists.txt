@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(Faraday
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Faraday - Battery Intelligence Suite"
     LANGUAGES CXX
 )
+
+if(WIN32)
+    enable_language(RC)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -76,6 +80,7 @@ target_link_libraries(faradaylib PUBLIC
 # ---------------------------------------------------------------------------
 qt_add_executable(faraday
     src/main.cpp
+    resources/faraday.rc
 )
 
 set_source_files_properties(ui/Theme.qml PROPERTIES

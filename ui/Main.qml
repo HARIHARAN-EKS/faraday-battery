@@ -18,6 +18,22 @@ ApplicationWindow {
         target: battery
         function onSettingsChanged() { Theme.dark = battery.theme === "dark" }
     }
+    Connections {
+        target: tray
+        function onOpenRequested() {
+            root.show()
+            root.raise()
+            root.requestActivate()
+        }
+    }
+
+    onClosing: (close) => {
+        if (tray.available && battery.minimizeToTray) {
+            close.accepted = false
+            root.hide()
+            tray.notifyMinimized()
+        }
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -149,7 +165,7 @@ ApplicationWindow {
             DashboardPage { }
             MonitorPage { }
             HistoryPage { }
-            PlaceholderPage { title: qsTr("Alerts & thresholds") }
+            AlertsPage { }
             PlaceholderPage { title: qsTr("Calibration & reports") }
             PlaceholderPage { title: qsTr("Settings") }
         }

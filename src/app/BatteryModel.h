@@ -67,6 +67,11 @@ class BatteryModel : public QObject
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY settingsChanged)
     Q_PROPERTY(int sampleIntervalSec READ sampleIntervalSec WRITE setSampleIntervalSec
                    NOTIFY settingsChanged)
+    Q_PROPERTY(bool minimizeToTray READ minimizeToTray NOTIFY settingsChanged)
+    Q_PROPERTY(bool autostartEnabled READ autostartEnabled WRITE setAutostartEnabled
+                   NOTIFY settingsChanged)
+    Q_PROPERTY(bool chargeCapSupported READ chargeCapSupported NOTIFY chargeCapChanged)
+    Q_PROPERTY(QString chargeCapDetail READ chargeCapDetail NOTIFY chargeCapChanged)
 
 public:
     explicit BatteryModel(QObject *parent = nullptr);
@@ -124,6 +129,16 @@ public:
     void setTheme(const QString &theme);
     int sampleIntervalSec() const;
     void setSampleIntervalSec(int seconds);
+    bool minimizeToTray() const;
+    bool autostartEnabled() const;
+    void setAutostartEnabled(bool enabled);
+    bool chargeCapSupported() const { return m_chargeCapSupported; }
+    QString chargeCapDetail() const { return m_chargeCapDetail; }
+
+    // Generic settings access for the preference pages.
+    Q_INVOKABLE QVariant settingValue(const QString &key) const;
+    Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE QString tryToggleChargeCap(bool enable);
 
     Q_INVOKABLE void resetSessionOrigin();
     Q_INVOKABLE void sampleNow();
@@ -141,6 +156,8 @@ signals:
     void reportChanged();
     void liveSeriesChanged();
     void settingsChanged();
+    void chargeCapChanged();
+    void alertRaised(const QString &title, const QString &message);
     void acquisitionError(const QString &message);
 
 private:
@@ -150,8 +167,13 @@ private:
     const BatteryDevice *primary() const;
     Verdict currentVerdict() const;
 
+    void probeChargeCapAsync();
+
     QThread m_workerThread;
     Sampler *m_sampler = nullptr;
+    class AlertManager *m_alerts = nullptr;
+    bool m_chargeCapSupported = false;
+    QString m_chargeCapDetail;
 
     Settings m_settings;
     Database m_database;

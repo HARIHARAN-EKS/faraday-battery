@@ -19,7 +19,7 @@ else()
     add_compile_options(-Wall -Wextra -Werror)
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Sql)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Sql Widgets)
 
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
@@ -47,11 +47,21 @@ qt_add_library(faradaylib STATIC
     src/app/Sampler.cpp
     src/app/BatteryModel.h
     src/app/BatteryModel.cpp
+    src/app/AlertManager.h
+    src/app/AlertManager.cpp
+    src/app/Autostart.h
+    src/app/Autostart.cpp
+    src/app/ChargeCap.h
+    src/app/ChargeCap.cpp
+    src/app/TrayManager.h
+    src/app/TrayManager.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC
     Qt6::Core
+    Qt6::Gui
     Qt6::Sql
+    Qt6::Widgets
     ole32
     oleaut32
     wbemuuid
@@ -79,6 +89,7 @@ qt_add_qml_module(faraday
         ui/pages/DashboardPage.qml
         ui/pages/MonitorPage.qml
         ui/pages/HistoryPage.qml
+        ui/pages/AlertsPage.qml
         ui/pages/PlaceholderPage.qml
 )
 

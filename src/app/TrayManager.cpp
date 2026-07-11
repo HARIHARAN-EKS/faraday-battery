@@ -1,0 +1,109 @@
+#include "TrayManager.h"
+
+#include <QApplication>
+#include <QMenu>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QSystemTrayIcon>
+
+namespace faraday {
+
+namespace {
+
+// Battery glyph drawn at runtime; avoids shipping a raster asset for the
+// tray and stays crisp at any DPI.
+QIcon makeTrayIcon()
+{
+    QPixmap pixmap(64, 64);
+    pixmap.fill(Qt::transparent);
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    // Battery body
+    p.setPen(QPen(QColor("#e6edf3"), 4));
+    p.setBrush(QColor(22, 27, 34, 200));
+    p.drawRoundedRect(QRectF(6, 18, 44, 30), 6, 6);
+    // Terminal nub
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor("#e6edf3"));
+    p.drawRoundedRect(QRectF(52, 27, 7, 12), 2, 2);
+    // Lightning bolt
+    QPainterPath bolt;
+    bolt.moveTo(31, 20);
+    bolt.lineTo(20, 36);
+    bolt.lineTo(27, 36);
+    bolt.lineTo(24, 47);
+    bolt.lineTo(36, 31);
+    bolt.lineTo(29, 31);
+    bolt.closeSubpath();
+    p.setBrush(QColor("#58a6ff"));
+    p.drawPath(bolt);
+    p.end();
+
+    return QIcon(pixmap);
+}
+
+} // namespace
+
+TrayManager::TrayManager(QObject *parent)
+    : QObject(parent)
+{
+    if (!qobject_cast<QApplication *>(QCoreApplication::instance()))
+        return; // no widgets application: tray unavailable
+    if (!QSystemTrayIcon::isSystemTrayAvailable())
+        return;
+
+    m_tray = new QSystemTrayIcon(makeTrayIcon(), this);
+    m_menu = new QMenu();
+
+    QAction *openAction = m_menu->addAction(tr("Open Faraday"));
+    connect(openAction, &QAction::triggered, this, &TrayManager::openRequested);
+    QAction *sampleAction = m_menu->addAction(tr("Sample now"));
+    connect(sampleAction, &QAction::triggered, this, &TrayManager::sampleNowRequested);
+    m_menu->addSeparator();
+    QAction *quitAction = m_menu->addAction(tr("Quit"));
+    connect(quitAction, &QAction::triggered, this, &TrayManager::quitRequested);
+
+    m_tray->setContextMenu(m_menu);
+    m_tray->setToolTip(tr("Faraday — Battery Intelligence Suite"));
+    connect(m_tray, &QSystemTrayIcon::activated, this,
+            [this](QSystemTrayIcon::ActivationReason reason) {
+                if (reason == QSystemTrayIcon::Trigger
+                    || reason == QSystemTrayIcon::DoubleClick) {
+                    emit openRequested();
+                }
+            });
+    m_tray->show();
+    m_available = true;
+}
+
+TrayManager::~TrayManager()
+{
+    delete m_menu;
+}
+
+void TrayManager::notifyMinimized()
+{
+    if (!m_available || m_minimizeNoticeShown)
+        return;
+    m_minimizeNoticeShown = true;
+    m_tray->showMessage(tr("Faraday keeps running"),
+                        tr("Monitoring continues in the tray. "
+                           "Right-click the icon to quit."),
+                        QSystemTrayIcon::Information, 4000);
+}
+
+void TrayManager::showAlert(const QString &title, const QString &message)
+{
+    if (m_available)
+        m_tray->showMessage(title, message, QSystemTrayIcon::Warning, 8000);
+}
+
+void TrayManager::setTooltip(const QString &text)
+{
+    if (m_available)
+        m_tray->setToolTip(text);
+}
+
+} // namespace faraday

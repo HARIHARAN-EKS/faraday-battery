@@ -1,5 +1,8 @@
 #include "BatteryModel.h"
 
+#include "app/AlertManager.h"
+#include "app/Autostart.h"
+#include "app/ChargeCap.h"
 #include "app/Sampler.h"
 #include "core/Metrics.h"
 
@@ -63,9 +66,30 @@ void BatteryModel::initialize(const QString &dataDir)
         m_database.initSchema();
 
     m_sessionOrigin = QDateTime::currentDateTime();
+    m_alerts = new AlertManager(&m_settings, this);
+    connect(m_alerts, &AlertManager::alertRaised, this, &BatteryModel::alertRaised);
+
     startSampler();
     ingestReportAsync();
+    probeChargeCapAsync();
     emit settingsChanged();
+}
+
+void BatteryModel::probeChargeCapAsync()
+{
+    QPointer<BatteryModel> guard(this);
+    QThreadPool::globalInstance()->start([guard]() {
+        const ChargeCapInfo info = ChargeCap::probe();
+        if (guard) {
+            QMetaObject::invokeMethod(guard, [guard, info]() {
+                if (!guard)
+                    return;
+                guard->m_chargeCapSupported = info.supported;
+                guard->m_chargeCapDetail = info.detail;
+                emit guard->chargeCapChanged();
+            }, Qt::QueuedConnection);
+        }
+    });
 }
 
 void BatteryModel::startSampler()
@@ -111,6 +135,21 @@ void BatteryModel::applySnapshot(const BatterySnapshot &snapshot)
     }
 
     appendLivePoint(snapshot);
+
+    if (m_alerts && snapshot.batteryPresent) {
+        AlertInput input;
+        input.percent = chargePercent();
+        if (voltageV() > 0)
+            input.voltageV = voltageV();
+        if (temperatureKnown())
+            input.temperatureC = temperatureC();
+        input.charging = charging();
+        input.onAcPower = onAcPower();
+        const BatteryDevice *dev = primary();
+        input.discharging = dev ? dev->discharging.value_or(false) : false;
+        m_alerts->process(input);
+    }
+
     emit snapshotChanged();
 }
 
@@ -735,6 +774,52 @@ QVariantMap BatteryModel::degradationInfo() const
                           eol->toString(QStringLiteral("MMMM yyyy")));
     }
     return result;
+}
+
+bool BatteryModel::minimizeToTray() const
+{
+    return m_settings.minimizeToTray();
+}
+
+bool BatteryModel::autostartEnabled() const
+{
+    return Autostart::isEnabled();
+}
+
+void BatteryModel::setAutostartEnabled(bool enabled)
+{
+    QString error;
+    if (!Autostart::setEnabled(enabled, QString(), QString(), &error) && !error.isEmpty())
+        emit acquisitionError(tr("Autostart change failed: %1").arg(error));
+    // Mirror the preference in settings for transparency (the shortcut
+    // itself remains the source of truth).
+    m_settings.setValue(QStringLiteral("launchWithWindows"), Autostart::isEnabled());
+    m_settings.save();
+    emit settingsChanged();
+}
+
+QVariant BatteryModel::settingValue(const QString &key) const
+{
+    return m_settings.value(key);
+}
+
+void BatteryModel::setSetting(const QString &key, const QVariant &value)
+{
+    m_settings.setValue(key, value);
+    m_settings.save();
+    if (key == QLatin1String("sampleIntervalSec") && m_sampler) {
+        QMetaObject::invokeMethod(m_sampler, "setIntervalSec", Qt::QueuedConnection,
+                                  Q_ARG(int, m_settings.sampleIntervalSec()));
+    }
+    emit settingsChanged();
+}
+
+QString BatteryModel::tryToggleChargeCap(bool enable)
+{
+    QString error;
+    if (ChargeCap::setEnabled(enable, &error))
+        return tr("Charge cap updated.");
+    return error;
 }
 
 void BatteryModel::resetSessionOrigin()

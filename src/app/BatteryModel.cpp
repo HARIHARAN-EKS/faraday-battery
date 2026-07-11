@@ -829,6 +829,30 @@ QString BatteryModel::tryToggleChargeCap(bool enable)
     return error;
 }
 
+QString BatteryModel::temperatureUnit() const
+{
+    return m_settings.temperatureUnit();
+}
+
+QString BatteryModel::energyUnit() const
+{
+    return m_settings.energyUnit();
+}
+
+QString BatteryModel::formatTemperature(double celsius) const
+{
+    if (m_settings.temperatureUnit() == QLatin1String("F"))
+        return QStringLiteral("%1 °F").arg(celsius * 9.0 / 5.0 + 32.0, 0, 'f', 1);
+    return QStringLiteral("%1 °C").arg(celsius, 0, 'f', 1);
+}
+
+QString BatteryModel::formatEnergy(double mWh) const
+{
+    if (m_settings.energyUnit() == QLatin1String("Wh"))
+        return QStringLiteral("%1 Wh").arg(mWh / 1000.0, 0, 'f', 1);
+    return QStringLiteral("%1 mWh").arg(qRound64(mWh));
+}
+
 QObject *BatteryModel::calibrationObject() const
 {
     return m_calibration;

@@ -158,12 +158,17 @@ Item {
                     Layout.fillWidth: true
                     title: qsTr("CAPACITY")
                     icon: "⚡"
-                    value: battery.remainingCapacitymWh >= 0
-                           ? (battery.remainingCapacitymWh / 1000).toFixed(1) + " Wh"
-                           : "—"
-                    sub: battery.fullChargeCapacitymWh >= 0
-                         ? qsTr("of %1 Wh full charge").arg((battery.fullChargeCapacitymWh / 1000).toFixed(1))
-                         : ""
+                    value: {
+                        battery.energyUnit // re-evaluate when the unit changes
+                        return battery.remainingCapacitymWh >= 0
+                               ? battery.formatEnergy(battery.remainingCapacitymWh) : "—"
+                    }
+                    sub: {
+                        battery.energyUnit
+                        return battery.fullChargeCapacitymWh >= 0
+                               ? qsTr("of %1 full charge").arg(battery.formatEnergy(battery.fullChargeCapacitymWh))
+                               : ""
+                    }
                 }
                 MetricCard {
                     Layout.fillWidth: true
@@ -171,9 +176,12 @@ Item {
                     icon: "❤"
                     accent: battery.gradeColor
                     value: battery.healthPercent >= 0 ? battery.healthPercent.toFixed(1) + "%" : "—"
-                    sub: battery.designCapacitymWh >= 0
-                         ? qsTr("design %1 Wh").arg((battery.designCapacitymWh / 1000).toFixed(1))
-                         : ""
+                    sub: {
+                        battery.energyUnit
+                        return battery.designCapacitymWh >= 0
+                               ? qsTr("design %1").arg(battery.formatEnergy(battery.designCapacitymWh))
+                               : ""
+                    }
                 }
                 MetricCard {
                     Layout.fillWidth: true
@@ -195,7 +203,11 @@ Item {
                     title: qsTr("TEMPERATURE")
                     icon: "\u{1F321}"
                     accent: battery.temperatureKnown && battery.temperatureC > 45 ? Theme.bad : Theme.accent
-                    value: battery.temperatureKnown ? battery.temperatureC.toFixed(1) + " °C" : "—"
+                    value: {
+                        battery.temperatureUnit
+                        return battery.temperatureKnown
+                               ? battery.formatTemperature(battery.temperatureC) : "—"
+                    }
                     sub: qsTr("system thermal estimate")
                 }
                 MetricCard {

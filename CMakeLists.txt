@@ -19,7 +19,7 @@ else()
     add_compile_options(-Wall -Wextra -Werror)
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Sql Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Sql Widgets LinguistTools)
 
 qt_standard_project_setup(REQUIRES 6.5)
 qt_policy(SET QTP0004 NEW)
@@ -95,7 +95,15 @@ qt_add_qml_module(faraday
         ui/pages/HistoryPage.qml
         ui/pages/AlertsPage.qml
         ui/pages/CalibrationPage.qml
-        ui/pages/PlaceholderPage.qml
+        ui/pages/SettingsPage.qml
+)
+
+# i18n: English ships as the source language; additional languages only
+# need new .ts files here. The .qm files are embedded under :/i18n/.
+qt_add_translations(faraday
+    TS_FILES i18n/faraday_en.ts
+    RESOURCE_PREFIX "/i18n"
+    LUPDATE_OPTIONS -no-obsolete
 )
 
 set_target_properties(faraday PROPERTIES

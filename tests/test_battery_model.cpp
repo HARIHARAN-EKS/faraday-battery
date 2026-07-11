@@ -297,6 +297,22 @@ private slots:
         QCOMPARE(model.formatDuration(300), QStringLiteral("5 min"));
         QCOMPARE(model.formatDuration(-5), QString());
     }
+
+    void unitFormatting()
+    {
+        BatteryModel model;
+        // Defaults: Celsius, mWh
+        QCOMPARE(model.temperatureUnit(), QStringLiteral("C"));
+        QCOMPARE(model.energyUnit(), QStringLiteral("mWh"));
+        QCOMPARE(model.formatTemperature(33.7), QStringLiteral("33.7 °C"));
+        QCOMPARE(model.formatEnergy(32288), QStringLiteral("32288 mWh"));
+
+        model.settings()->setValue(QStringLiteral("temperatureUnit"), QStringLiteral("F"));
+        model.settings()->setValue(QStringLiteral("energyUnit"), QStringLiteral("Wh"));
+        QCOMPARE(model.formatTemperature(0.0), QStringLiteral("32.0 °F"));
+        QCOMPARE(model.formatTemperature(100.0), QStringLiteral("212.0 °F"));
+        QCOMPARE(model.formatEnergy(32288), QStringLiteral("32.3 Wh"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestBatteryModel)

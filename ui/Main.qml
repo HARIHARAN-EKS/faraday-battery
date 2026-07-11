@@ -167,7 +167,7 @@ ApplicationWindow {
             HistoryPage { }
             AlertsPage { }
             CalibrationPage { }
-            PlaceholderPage { title: qsTr("Settings") }
+            SettingsPage { }
         }
     }
 }

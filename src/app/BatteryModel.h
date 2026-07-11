@@ -68,6 +68,9 @@ class BatteryModel : public QObject
     Q_PROPERTY(int sampleIntervalSec READ sampleIntervalSec WRITE setSampleIntervalSec
                    NOTIFY settingsChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray NOTIFY settingsChanged)
+    Q_PROPERTY(QString temperatureUnit READ temperatureUnit NOTIFY settingsChanged)
+    Q_PROPERTY(QString energyUnit READ energyUnit NOTIFY settingsChanged)
+    Q_PROPERTY(QString dataDirPath READ dataDirPath NOTIFY settingsChanged)
     Q_PROPERTY(bool autostartEnabled READ autostartEnabled WRITE setAutostartEnabled
                    NOTIFY settingsChanged)
     Q_PROPERTY(bool chargeCapSupported READ chargeCapSupported NOTIFY chargeCapChanged)
@@ -163,6 +166,13 @@ public:
     Q_INVOKABLE void resetSessionOrigin();
     Q_INVOKABLE void sampleNow();
     Q_INVOKABLE QString formatDuration(qint64 seconds) const;
+
+    // Unit-aware formatting (Phase 9)
+    QString temperatureUnit() const;
+    QString energyUnit() const;
+    QString dataDirPath() const { return m_dataDir; }
+    Q_INVOKABLE QString formatTemperature(double celsius) const;
+    Q_INVOKABLE QString formatEnergy(double mWh) const;
 
     // Testing hooks (also used by later phases)
     void applySnapshot(const BatterySnapshot &snapshot);

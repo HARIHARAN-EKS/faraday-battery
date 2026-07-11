@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QTranslator>
 
 int main(int argc, char *argv[])
 {
@@ -17,6 +18,15 @@ int main(int argc, char *argv[])
 
     faraday::BatteryModel model;
     model.initialize();
+
+    // English is the source language; other languages load from the
+    // embedded :/i18n resources when their .qm ships.
+    QTranslator translator;
+    const QString language = model.settings()->language();
+    if (language != QLatin1String("en")
+        && translator.load(QStringLiteral(":/i18n/faraday_%1").arg(language))) {
+        app.installTranslator(&translator);
+    }
 
     faraday::TrayManager tray;
     QObject::connect(&model, &faraday::BatteryModel::alertRaised,

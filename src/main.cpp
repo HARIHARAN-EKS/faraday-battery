@@ -51,6 +51,14 @@ int main(int argc, char *argv[])
                      Qt::QueuedConnection);
     engine.loadFromModule("Faraday", "Main");
 
+    // objectCreationFailed does NOT fire when a QML module *plugin* fails to
+    // load (e.g. a missing Qt DLL in a broken deployment) — the engine just
+    // produces no root objects. Without this check the tray-driven event
+    // loop would keep a windowless zombie process alive. Verified against a
+    // deliberately broken dist.
+    if (engine.rootObjects().isEmpty())
+        return 1;
+
     // Without a tray icon, closing the window must quit the app.
     if (!tray.available())
         app.setQuitOnLastWindowClosed(true);

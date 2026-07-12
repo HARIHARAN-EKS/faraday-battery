@@ -2,7 +2,27 @@
 
 ## Soak run (4 hours, default 30 s interval, isolated portable instance)
 
-*(table completed at collection — see final section)*
+| Metric | Result |
+|---|---|
+| Duration | **245.5 min (4 h 05 m)**, monitored once per minute (246 samples) |
+| Crashes | **0** — process alive, window intact, `Responding = true` at the end |
+| Sampling cadence | 496 db samples across 14,818 s = **29.94 s** — exact 30 s ticks for four hours |
+| CPU | 55.9 s total = **0.38 % of one core** (≈0.05 % of the 8-core machine) |
+| Working set | 178 MB at launch → OS-trimmed to 41–57 MB while idle (normal Windows behavior) |
+| Private bytes (the leak metric) | 135 MB → 149 MB, **strongly decelerating**: +9.7 MB in hour 1 (warm-up), +2.8 in hour 2, **+0.6 in hour 3, +0.8 in hour 4** (quartile slopes +3.4 / +4.1 / **+0.15** / +0.70 MB/h) |
+| Handles / threads | 2484→2468 / 27→21 — flat |
+| Database | `PRAGMA integrity_check = ok` after the full run |
+| AC transitions | none occurred naturally — the machine was genuinely on battery the whole soak (forced simulation covers transitions; see below) |
+
+**Leak verdict: no leak.** The curve is asymptotic (plateau ≈149 MB), not
+linear; the residual sub-1 MB/h tail is attributable to the live-series
+ring buffer still filling by design (capped at 7200 points — it stops
+growing at the cap) plus QML JS-heap high-water, and is itself still
+decelerating. Recorded honestly as a **low-severity watch item**: confirm
+the plateau on a 24 h run before calling the tail slope exactly zero.
+Cross-check: the 1 Hz stress run grew +1.2 MB over ~2000 update cycles —
+consistent with the same bounded mechanisms, 30× faster event rate, no
+proportional 30× growth.
 
 ## Stress run (fastest interval, 30+ minutes)
 

@@ -23,18 +23,18 @@ Requires **Windows 10/11 (x64)**.
 
 ### Portable ZIP — recommended
 
-**[`Faraday-1.0.5-portable-win64.zip`](https://github.com/HARIHARAN-EKS/faraday-battery/releases/tag/v1.0.5)** — no installer, no admin rights, nothing written outside its own folder. **0 detections on VirusTotal**, whole archive and every file inside it.
+**[`Faraday-1.0.6-portable-win64.zip`](https://github.com/HARIHARAN-EKS/faraday-battery/releases/tag/v1.0.6)** — no installer, no admin rights, nothing written outside its own folder.
 
 ```
-SHA-256  f81074358f0d64c2312e120c5ae598af297ebdfd51dce785e305e8971d3029fe
+SHA-256  45bba4d0c258a14db5304e8a15cac4c56cfdbd6d14565bb0a6d5aa638a7fb115
 ```
 
 ### Installer — alternative
 
-**[`Faraday-1.0.5-setup-win64.exe`](https://github.com/HARIHARAN-EKS/faraday-battery/releases/tag/v1.0.5)** — per-user install, never elevates, clean uninstaller.
+**[`Faraday-1.0.6-setup-win64.exe`](https://github.com/HARIHARAN-EKS/faraday-battery/releases/tag/v1.0.6)** — per-user install, never elevates, clean uninstaller.
 
 ```
-SHA-256  8007b30a8a3f0eac779aa2df6ed5dcf7a751f437bbe030b47afd2e6888ee7a2d
+SHA-256  be732f69f387412ec8bd79df4499f04ddd6b640115187714c6bf544c3b66406b
 ```
 
 Verify any download with `Get-FileHash <file>` before running it.
@@ -63,9 +63,17 @@ That dialog is a deliberate design decision, not an apology. A Qt application's 
 
 ## Antivirus — honest and up front
 
-Faraday is **unsigned**, because a code-signing certificate costs money this project does not have. That has a measurable cost, and here it is (VirusTotal, 2026-07-12):
+Faraday is **unsigned**, because a code-signing certificate costs money this project does not have. That has a measurable cost, and here it is.
 
-| File | Result | Flagged by |
+> **These numbers are the measured results for the 1.0.5 binaries.** 1.0.6
+> rebuilt all four artifacts, so they carry new hashes and are **awaiting a
+> fresh VirusTotal scan** — the results below do not automatically transfer to
+> them. Nothing about the security profile changed (same imports, same
+> manifest, same sections, no packing, still zero network code), but this
+> project does not claim scan results it has not measured. The 1.0.6 hashes are
+> in the Download section above; verify them yourself if you want to check.
+
+| File (1.0.5) | Result | Flagged by |
 |---|---|---|
 | **`faraday-core.exe`** — the actual application | **0 detections** | — |
 | **Portable ZIP** — the recommended download | **0 detections** | — (every bundled file 0/N) |

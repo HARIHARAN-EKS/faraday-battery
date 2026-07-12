@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(Faraday
-    VERSION 1.0.5
+    VERSION 1.0.6
     DESCRIPTION "Faraday - Battery Intelligence Suite"
     LANGUAGES CXX
 )

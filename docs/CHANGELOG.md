@@ -3,6 +3,48 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.6] — 2026-07-12
+
+Layout and branding fixes. **No behavior changes**, no new capability, no new
+imports.
+
+### Fixed
+
+- **Overlapping text in the History page heading** — the title and the range
+  selector collided at narrow window widths; the header is now a proper
+  responsive row that reflows instead of overprinting.
+- **Live monitor legend collision** — the legend overlapped the plot area at
+  small heights; it now reserves its own row.
+- **The logo rendered as a smudge.** Three separate defects, all fixed
+  structurally (see below).
+
+### Changed
+
+- **Icons rebuilt from a purpose-drawn mark.** `tools/make_icons.py` now
+  renders the 16/24/32 px frames from a simplified, high-contrast silhouette
+  (fewer details, stronger shapes) and keeps the full artwork at 48/64/128/256.
+  This is standard icon practice: the full artwork simply has more detail than
+  16 px can carry. Every frame in `faraday.ico`, `faraday_core.ico` and
+  `faraday_uninst.ico` is now a dedicated render at that size rather than a
+  blind downscale of one large bitmap.
+- **The window, taskbar and tray icon now load the multi-resolution
+  `faraday.ico`**, so Windows picks the correct pre-rendered frame instead of
+  rescaling a single large PNG.
+- **The in-app sidebar mark** now uses `fillMode: PreserveAspectFit`, a
+  device-pixel-ratio-aware `sourceSize`, `smooth` and `mipmap`, in a slot
+  large enough to hold it (32 px). It was previously squashed and blurry.
+
+### Verified
+
+- 27 suites / 3787 cases green.
+- All three PE files: asInvoker, no network imports, no W+X sections, full
+  VersionInfo (1.0.6.0). Windows Defender: clean on all four artifacts.
+- Portable ZIP launch, bare-exe friendly-error path, and silent install →
+  launch → silent uninstall all re-tested end-to-end.
+- **`faraday-core.exe` is a genuinely new binary** (the QML module became a
+  static library in this cycle), so its AV result does not inherit 1.0.5's.
+  All four artifacts are re-submitted to VirusTotal under new hashes.
+
 ## [1.0.5] — measured AV results (2026-07-12, post-release)
 
 VirusTotal scans of all four 1.0.5 artifacts. **No binaries were changed in

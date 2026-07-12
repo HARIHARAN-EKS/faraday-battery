@@ -203,7 +203,7 @@ private slots:
         QCOMPARE(staticSpy.count(), 1);
 
         const QVariantList rows = model.staticInfo();
-        QCOMPARE(rows.size(), 7); // name, mfr, serial, date, chem, uid, design
+        QCOMPARE(rows.size(), 6); // name, mfr, serial, date, chem, design
 
         QHash<QString, QVariantMap> byField;
         for (const QVariant &v : rows) {
@@ -265,9 +265,8 @@ private slots:
         QCOMPARE(byField.value(QStringLiteral("Chemistry"))
                      .value(QStringLiteral("value")).toString(),
                  QStringLiteral("Lithium-ion"));
-        QCOMPARE(byField.value(QStringLiteral("Unique ID"))
-                     .value(QStringLiteral("value")).toString(),
-                 QStringLiteral("Primary"));
+        // Unique ID lives in the Advanced drawer since the F3 fix.
+        QVERIFY(!byField.contains(QStringLiteral("Unique ID")));
         QVERIFY(byField.value(QStringLiteral("Design capacity"))
                     .value(QStringLiteral("available")).toBool());
         QCOMPARE(byField.value(QStringLiteral("Design capacity"))

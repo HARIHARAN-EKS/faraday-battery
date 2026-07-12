@@ -169,7 +169,7 @@ private slots:
 
         // Static-info rows appear per pack, labeled.
         const QVariantList rows = model.staticInfo();
-        QCOMPARE(rows.size(), 14); // 7 fields x 2 packs
+        QCOMPARE(rows.size(), 12); // 6 fields x 2 packs
         QCOMPARE(rows.first().toMap().value(QStringLiteral("packLabel")).toString(),
                  QStringLiteral("Pack 1"));
         QCOMPARE(rows.last().toMap().value(QStringLiteral("packLabel")).toString(),

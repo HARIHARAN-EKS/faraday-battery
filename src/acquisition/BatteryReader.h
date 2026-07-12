@@ -75,6 +75,14 @@ public:
     // BatteryRuntime.EstimatedRuntime is 0xFFFFFFFF when unknown (on AC).
     static std::optional<quint32> sanitizeRuntime(quint32 seconds);
 
+    // Cycle-count sentinel policy (field defect F1, MSI machine): firmware
+    // that does not track cycles reports 0 through BatteryCycleCount, which
+    // is indistinguishable from a genuine factory-fresh zero at the WMI
+    // level. Policy: zero = "not reported" — a real measured zero carries no
+    // decision value anyway (a pack with zero cycles is new by definition
+    // and its health says so). Documented as a known limitation.
+    static std::optional<quint32> sanitizeCycleCount(quint32 cycles);
+
     // Win32_PortableBattery.Chemistry enum (1..8) to a display string.
     static QString chemistryToString(int code);
 

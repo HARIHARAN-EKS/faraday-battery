@@ -67,12 +67,22 @@ Item {
                     anchors.margins: 18
                     spacing: 28
 
-                    HealthRing {
-                        Layout.preferredWidth: 210
-                        Layout.preferredHeight: 210
-                        value: battery.healthPercent
-                        ringColor: battery.gradeColor
-                        sublabel: battery.gradeName
+                    ColumnLayout {
+                        spacing: 2
+                        HealthRing {
+                            Layout.preferredWidth: 210
+                            Layout.preferredHeight: 210
+                            value: battery.healthPercent
+                            ringColor: battery.gradeColor
+                            sublabel: battery.gradeName
+                        }
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: qsTr("BATTERY HEALTH")
+                            color: Theme.textDim
+                            font.pixelSize: 11
+                            font.letterSpacing: 1.2
+                        }
                     }
 
                     ColumnLayout {
@@ -118,10 +128,28 @@ Item {
                             font.pixelSize: 15
                         }
 
-                        // Charge bar
+                        // Charge bar — explicitly labeled so it cannot be
+                        // mistaken for the health ring next to it (F2).
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 8
+                            Text {
+                                text: qsTr("CURRENT CHARGE")
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                                font.letterSpacing: 1.2
+                            }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: battery.chargePercent >= 0
+                                      ? battery.chargePercent.toFixed(0) + "%" : ""
+                                color: Theme.textDim
+                                font.pixelSize: 11
+                            }
+                        }
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.topMargin: 6
+                            Layout.topMargin: 2
                             height: 10
                             radius: 5
                             color: Theme.chartGrid
@@ -129,7 +157,11 @@ Item {
                                 width: parent.width * Math.max(0, Math.min(1, battery.chargePercent / 100))
                                 height: parent.height
                                 radius: 5
-                                color: battery.charging ? Theme.accent : battery.gradeColor
+                                // Always accent (the "charge" color) — the
+                                // old grade-colored bar was half the F2
+                                // confusion with the health ring.
+                                color: Theme.accent
+                                opacity: battery.charging ? 1.0 : 0.75
                                 Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
                             }
                         }
@@ -196,7 +228,8 @@ Item {
                     title: qsTr("CYCLES")
                     icon: "↻"
                     value: battery.cycleCount >= 0 ? battery.cycleCount.toString() : "—"
-                    sub: qsTr("charge cycles used")
+                    sub: battery.cycleCount >= 0 ? qsTr("charge cycles used")
+                                                 : qsTr("not reported by this hardware")
                 }
                 MetricCard {
                     id: temperatureCard

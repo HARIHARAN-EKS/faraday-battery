@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QThreadPool>
 
@@ -310,12 +311,17 @@ double BatteryModel::wearPercent() const
 
 int BatteryModel::cycleCount() const
 {
+    // Sentinel policy (field defect F1): zero cycle counts mean "firmware
+    // does not track cycles", never a measured value — treat as absent so
+    // nothing downstream can reason from a phantom zero.
     const BatteryDevice *dev = primary();
-    if (dev && dev->cycleCount.has_value())
+    if (dev && dev->cycleCount.has_value() && *dev->cycleCount > 0)
         return static_cast<int>(*dev->cycleCount);
-    if (m_report.ok && !m_report.batteries.isEmpty()
-        && m_report.batteries.first().cycleCount.has_value())
-        return static_cast<int>(*m_report.batteries.first().cycleCount);
+    if (m_report.ok && !m_report.batteries.isEmpty()) {
+        const auto &cycles = m_report.batteries.first().cycleCount;
+        if (cycles.has_value() && *cycles > 0)
+            return static_cast<int>(*cycles);
+    }
     return -1;
 }
 
@@ -377,8 +383,10 @@ bool BatteryModel::powerKnown() const
 
 double BatteryModel::voltageV() const
 {
+    // Voltage 0 is a firmware stub, not a measurement — a pack at 0 V could
+    // not be powering the machine. Same sentinel policy as cycle counts.
     const BatteryDevice *dev = primary();
-    if (dev && dev->voltagemV.has_value())
+    if (dev && dev->voltagemV.has_value() && *dev->voltagemV > 0)
         return static_cast<double>(*dev->voltagemV) / 1000.0;
     return -1.0;
 }
@@ -557,6 +565,27 @@ QStringList BatteryModel::verdictDetails() const
     return currentVerdict().details;
 }
 
+bool BatteryModel::looksLikeAcpiIdentifier(const QString &name)
+{
+    if (name.isEmpty())
+        return false;
+    for (const QChar &c : name) {
+        // Any lowercase letter or space reads as human text, not an ACPI id.
+        if (c.isLower() || c.isSpace())
+            return false;
+        if (!c.isLetterOrNumber() && c != QLatin1Char('_'))
+            return false;
+    }
+    // ACPI object paths carry underscores ("BIF0_9") or are short
+    // letters-then-digits object names ("BAT1", "BIF0"). Part numbers like
+    // "45N1127" (digit-first, no underscore) stay visible.
+    if (name.contains(QLatin1Char('_')))
+        return true;
+    static const QRegularExpression shortObject(
+        QStringLiteral("^[A-Z]{2,4}[0-9]{1,2}$"));
+    return shortObject.match(name).hasMatch();
+}
+
 QVariantMap BatteryModel::resolvedStaticFor(int index) const
 {
     QVariantMap out;
@@ -580,8 +609,12 @@ QVariantMap BatteryModel::resolvedStaticFor(int index) const
     // classes are last-resort metadata.
     const QString kPowercfg = QStringLiteral("powercfg");
 
+    // A raw ACPI object identifier is not a product name (field defect F3);
+    // it stays visible in the Advanced drawer but never as the primary value.
     QString name = dev ? dev->name : QString();
-    put("name", name, source("name"));
+    if (looksLikeAcpiIdentifier(name))
+        name.clear();
+    put("name", name, name.isEmpty() ? QString() : source("name"));
 
     QString manufacturer, manufacturerSrc;
     if (dev && !dev->manufacturer.isEmpty()
@@ -682,7 +715,8 @@ QVariantList BatteryModel::staticInfo() const
         addRow("serialNumber", tr("Serial number"), QString());
         addRow("manufactureDate", tr("Manufacture date"), QString());
         addRow("chemistry", tr("Chemistry"), QString());
-        addRow("uniqueId", tr("Unique ID"), QString());
+        // Unique ID (a raw firmware identifier) moved to the Advanced
+        // drawer in the F3 fix — it is diagnostics, not identity.
         const QVariant design = resolved.value(QStringLiteral("designCapacitymWh"));
         addRow("designCapacitymWh", tr("Design capacity"),
                design.isValid() && design.toLongLong() > 0
@@ -759,6 +793,8 @@ QVariantList BatteryModel::rawStreams() const
             b.manufactureDate.isEmpty() ? QVariant() : QVariant(b.manufactureDate));
         add(src, QStringLiteral("UniqueID"),
             b.uniqueId.isEmpty() ? QVariant() : QVariant(b.uniqueId));
+        add(src, QStringLiteral("DeviceName (raw)"),
+            b.name.isEmpty() ? QVariant() : QVariant(b.name));
     }
     for (const ThermalZone &zone : m_snapshot.thermalZones) {
         add(zone.instanceName, QStringLiteral("Temperature (°C)"),
@@ -863,9 +899,12 @@ QVariantList BatteryModel::capacityHistoryList() const
 
     auto addPoint = [&merged](const QDate &start, const QDate &end,
                               const QVariant &design, const QVariant &full,
-                              const QVariant &cycles, const QString &source) {
+                              const QVariant &cyclesIn, const QString &source) {
         if (!start.isValid())
             return;
+        // Cycle sentinel policy: zero = untracked, not a data point.
+        const QVariant cycles =
+            (cyclesIn.isValid() && cyclesIn.toLongLong() > 0) ? cyclesIn : QVariant();
         const QString key = start.toString(Qt::ISODate) + QLatin1Char('|') + source;
         QVariantMap map;
         map.insert(QStringLiteral("dateMs"),

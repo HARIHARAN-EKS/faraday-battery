@@ -78,11 +78,28 @@ Verdict HealthVerdict::generate(const VerdictInput &input)
                                .arg(QString::number(*input.healthPercent, 'f', 1));
     }
 
-    if (input.cycleCount.has_value()) {
+    // Cycle-derived statements require a MEASURED, non-zero cycle count.
+    // Zero is the untracked-firmware sentinel (field defect F1): inferring
+    // "early in its life" from it contradicted a measured 33% wear on real
+    // hardware. Absent or zero => say nothing about cycles at all.
+    if (input.cycleCount.has_value() && *input.cycleCount > 0) {
+        const bool visiblyWorn =
+            input.healthPercent.has_value() && *input.healthPercent < 80.0;
         if (*input.cycleCount < 100) {
-            verdict.details << tr("With %1 charge cycles, the battery is still early in "
-                                  "its life (most packs are rated for 500–1000 cycles).")
-                                   .arg(*input.cycleCount);
+            if (visiblyWorn) {
+                // Low cycles + real wear is calendar aging — claiming the
+                // battery is "early in its life" would contradict the
+                // capacity line above it.
+                verdict.details << tr("Only %1 charge cycles are recorded, yet capacity "
+                                      "has already dropped noticeably — consistent with "
+                                      "calendar aging or sustained heat rather than "
+                                      "heavy use.")
+                                       .arg(*input.cycleCount);
+            } else {
+                verdict.details << tr("With %1 charge cycles, the battery is still early in "
+                                      "its life (most packs are rated for 500–1000 cycles).")
+                                       .arg(*input.cycleCount);
+            }
         } else if (*input.cycleCount < 500) {
             verdict.details << tr("%1 charge cycles is moderate use; most packs are rated "
                                   "for 500–1000 cycles.")

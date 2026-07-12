@@ -84,6 +84,13 @@ std::optional<quint32> BatteryReader::sanitizeRuntime(quint32 seconds)
     return seconds;
 }
 
+std::optional<quint32> BatteryReader::sanitizeCycleCount(quint32 cycles)
+{
+    if (cycles == 0)
+        return std::nullopt; // untracked-cycles firmware reports 0 (see header)
+    return cycles;
+}
+
 QString BatteryReader::chemistryToString(int code)
 {
     switch (code) {
@@ -269,7 +276,8 @@ void BatteryReader::applyRootWmiClassRows(BatterySnapshot &snapshot, const QByte
         if (className == "BatteryFullChargedCapacity") {
             dev.fullChargedCapacitymWh = optUInt(row, QStringLiteral("FullChargedCapacity"));
         } else if (className == "BatteryCycleCount") {
-            dev.cycleCount = optUInt(row, QStringLiteral("CycleCount"));
+            const std::optional<quint32> raw = optUInt(row, QStringLiteral("CycleCount"));
+            dev.cycleCount = raw.has_value() ? sanitizeCycleCount(*raw) : std::nullopt;
         } else if (className == "BatteryStatus") {
             dev.remainingCapacitymWh = optUInt(row, QStringLiteral("RemainingCapacity"));
             dev.chargeRatemW = optInt(row, QStringLiteral("ChargeRate"));

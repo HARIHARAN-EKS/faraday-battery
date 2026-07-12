@@ -195,6 +195,11 @@ public:
     // The exact input applySnapshot() hands to the alert manager — exposed
     // so the estimate-gating of the temperature alert is unit-testable.
     struct AlertInput currentAlertInput() const;
+
+    // Field defect F3: raw ACPI object names ("BIF0_9", "BAT1") must not be
+    // presented as product names. True when the string is an internal
+    // identifier rather than human-readable text.
+    static bool looksLikeAcpiIdentifier(const QString &name);
     Settings *settings() { return &m_settings; }
     Database *database() { return &m_database; }
     const BatterySnapshot &snapshot() const { return m_snapshot; }

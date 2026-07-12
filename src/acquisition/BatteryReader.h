@@ -21,6 +21,10 @@ namespace faraday {
 // cache instead of blanking the pack metadata, and a failure on the first
 // read is retried on every subsequent sample.
 //
+// The row-application layer is deliberately separated from the WMI query
+// layer: apply*Rows() take raw property maps and are fuzz-tested with
+// hostile input (wrong types, garbage, partial rows, duplicates).
+//
 // Thread affinity: initialize() and read() must run on the same thread
 // (COM apartment requirement). Never throws.
 class BatteryReader
@@ -32,7 +36,34 @@ public:
     bool initialize();
     BatterySnapshot read();
 
-    // Pure helpers, exposed for unit testing.
+    // --- Row-application layer (pure w.r.t. hardware; fuzz-tested) -------
+
+    // BatteryStaticData rows -> identity fields + design capacity.
+    static void applyStaticRows(BatterySnapshot &snapshot, const QList<QVariantMap> &rows);
+
+    // BatteryFullChargedCapacity / BatteryCycleCount / BatteryStatus /
+    // BatteryRuntime rows, dispatched by class name. Unknown class names
+    // are ignored.
+    static void applyRootWmiClassRows(BatterySnapshot &snapshot, const QByteArray &className,
+                                      const QList<QVariantMap> &rows);
+
+    // Win32_Battery + Win32_PortableBattery rows, aligned by ordinal.
+    static void applyCimv2Rows(BatterySnapshot &snapshot, const QList<QVariantMap> &win32,
+                               const QList<QVariantMap> &portable);
+
+    // One MsAcpi_ThermalZoneTemperature row -> a ThermalZone (stub-filtered).
+    static ThermalZone zoneFromRow(const QVariantMap &row);
+
+    // The BatteryStaticData transient-failure policy: on success, refresh
+    // the per-boot cache and apply; on failure, reuse the cache if one
+    // exists; otherwise record the error in snapshot.unavailable.
+    void applyStaticDataResult(BatterySnapshot &snapshot, bool ok,
+                               const QList<QVariantMap> &rows, const QString &error);
+
+    // Last successful BatteryStaticData rows (exposed for cache tests).
+    const QList<QVariantMap> &staticCache() const { return m_staticCache; }
+
+    // --- Pure helpers, exposed for unit testing --------------------------
 
     // MsAcpi_ThermalZoneTemperature.CurrentTemperature is tenths of Kelvin.
     static double thermalRawToCelsius(quint32 raw);
@@ -80,8 +111,7 @@ private:
     void mergeRootWmi(BatterySnapshot &snapshot);
     void mergeCimv2(BatterySnapshot &snapshot);
     void mergeThermal(BatterySnapshot &snapshot);
-    void applyStaticRows(BatterySnapshot &snapshot, const QList<QVariantMap> &rows);
-    BatteryDevice &deviceFor(BatterySnapshot &snapshot, const QString &instanceName);
+    static BatteryDevice &deviceFor(BatterySnapshot &snapshot, const QString &instanceName);
 
     std::unique_ptr<WmiClient> m_rootWmi;
     std::unique_ptr<WmiClient> m_cimv2;

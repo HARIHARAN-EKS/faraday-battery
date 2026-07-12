@@ -257,97 +257,38 @@ void BatteryReader::applyStaticRows(BatterySnapshot &snapshot, const QList<QVari
     }
 }
 
-void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
+void BatteryReader::applyRootWmiClassRows(BatterySnapshot &snapshot, const QByteArray &className,
+                                          const QList<QVariantMap> &rows)
 {
-    if (!m_rootWmiOk) {
-        snapshot.unavailable << QStringLiteral("ROOT\\WMI: %1").arg(m_rootWmi->lastError());
-        return;
-    }
-
-    // BatteryStaticData rides the flaky perf adapter; enumerate with the
-    // CreateInstanceEnum fallback and reuse the cache across transient
-    // failures (the data is static per boot).
-    {
-        bool ok = false;
-        const QList<QVariantMap> rows =
-            m_rootWmi->queryInstances(QStringLiteral("BatteryStaticData"), &ok);
-        if (ok && !rows.isEmpty()) {
-            m_staticCache = rows;
-            applyStaticRows(snapshot, rows);
-        } else if (!m_staticCache.isEmpty()) {
-            applyStaticRows(snapshot, m_staticCache);
-        } else if (!ok) {
-            snapshot.unavailable << QStringLiteral("BatteryStaticData: %1")
-                                        .arg(m_rootWmi->lastError());
-        }
-    }
-
-    struct ClassSpec {
-        const char *className;
-        const char *label;
-    };
-    const ClassSpec classes[] = {
-        { "BatteryFullChargedCapacity", "BatteryFullChargedCapacity" },
-        { "BatteryCycleCount", "BatteryCycleCount" },
-        { "BatteryStatus", "BatteryStatus" },
-        { "BatteryRuntime", "BatteryRuntime" },
-    };
-
-    for (const ClassSpec &spec : classes) {
-        bool ok = false;
-        const QList<QVariantMap> rows =
-            m_rootWmi->queryInstances(QLatin1String(spec.className), &ok);
-        if (!ok) {
-            snapshot.unavailable << QStringLiteral("%1: %2")
-                                        .arg(QLatin1String(spec.label), m_rootWmi->lastError());
+    for (const QVariantMap &row : rows) {
+        const QString instance = optString(row, QStringLiteral("InstanceName"));
+        if (instance.isEmpty())
             continue;
-        }
-        for (const QVariantMap &row : rows) {
-            const QString instance = optString(row, QStringLiteral("InstanceName"));
-            if (instance.isEmpty())
-                continue;
-            BatteryDevice &dev = deviceFor(snapshot, instance);
+        BatteryDevice &dev = deviceFor(snapshot, instance);
 
-            if (qstrcmp(spec.className, "BatteryFullChargedCapacity") == 0) {
-                dev.fullChargedCapacitymWh = optUInt(row, QStringLiteral("FullChargedCapacity"));
-            } else if (qstrcmp(spec.className, "BatteryCycleCount") == 0) {
-                dev.cycleCount = optUInt(row, QStringLiteral("CycleCount"));
-            } else if (qstrcmp(spec.className, "BatteryStatus") == 0) {
-                dev.remainingCapacitymWh = optUInt(row, QStringLiteral("RemainingCapacity"));
-                dev.chargeRatemW = optInt(row, QStringLiteral("ChargeRate"));
-                dev.dischargeRatemW = optInt(row, QStringLiteral("DischargeRate"));
-                dev.voltagemV = optUInt(row, QStringLiteral("Voltage"));
-                dev.powerOnline = optBool(row, QStringLiteral("PowerOnline"));
-                dev.charging = optBool(row, QStringLiteral("Charging"));
-                dev.discharging = optBool(row, QStringLiteral("Discharging"));
-                dev.critical = optBool(row, QStringLiteral("Critical"));
-            } else if (qstrcmp(spec.className, "BatteryRuntime") == 0) {
-                const std::optional<quint32> raw = optUInt(row, QStringLiteral("EstimatedRuntime"));
-                dev.estimatedRuntimeSec = raw.has_value() ? sanitizeRuntime(*raw) : std::nullopt;
-            }
+        if (className == "BatteryFullChargedCapacity") {
+            dev.fullChargedCapacitymWh = optUInt(row, QStringLiteral("FullChargedCapacity"));
+        } else if (className == "BatteryCycleCount") {
+            dev.cycleCount = optUInt(row, QStringLiteral("CycleCount"));
+        } else if (className == "BatteryStatus") {
+            dev.remainingCapacitymWh = optUInt(row, QStringLiteral("RemainingCapacity"));
+            dev.chargeRatemW = optInt(row, QStringLiteral("ChargeRate"));
+            dev.dischargeRatemW = optInt(row, QStringLiteral("DischargeRate"));
+            dev.voltagemV = optUInt(row, QStringLiteral("Voltage"));
+            dev.powerOnline = optBool(row, QStringLiteral("PowerOnline"));
+            dev.charging = optBool(row, QStringLiteral("Charging"));
+            dev.discharging = optBool(row, QStringLiteral("Discharging"));
+            dev.critical = optBool(row, QStringLiteral("Critical"));
+        } else if (className == "BatteryRuntime") {
+            const std::optional<quint32> raw = optUInt(row, QStringLiteral("EstimatedRuntime"));
+            dev.estimatedRuntimeSec = raw.has_value() ? sanitizeRuntime(*raw) : std::nullopt;
         }
     }
 }
 
-void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
+void BatteryReader::applyCimv2Rows(BatterySnapshot &snapshot, const QList<QVariantMap> &win32,
+                                   const QList<QVariantMap> &portable)
 {
-    if (!m_cimv2Ok) {
-        snapshot.unavailable << QStringLiteral("ROOT\\CIMV2: %1").arg(m_cimv2->lastError());
-        return;
-    }
-
-    bool ok = false;
-    const QList<QVariantMap> win32 =
-        m_cimv2->queryInstances(QStringLiteral("Win32_Battery"), &ok);
-    if (!ok)
-        snapshot.unavailable << QStringLiteral("Win32_Battery: %1").arg(m_cimv2->lastError());
-
-    bool okPortable = false;
-    const QList<QVariantMap> portable =
-        m_cimv2->queryInstances(QStringLiteral("Win32_PortableBattery"), &okPortable);
-    if (!okPortable)
-        snapshot.unavailable << QStringLiteral("Win32_PortableBattery: %1").arg(m_cimv2->lastError());
-
     // ROOT\WMI and CIMV2 use unrelated instance keys, so align by ordinal;
     // in practice enumeration order matches on multi-battery systems.
     const int count = qMax(win32.size(), portable.size());
@@ -421,6 +362,91 @@ void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
     }
 }
 
+ThermalZone BatteryReader::zoneFromRow(const QVariantMap &row)
+{
+    ThermalZone zone;
+    zone.instanceName = optString(row, QStringLiteral("InstanceName"));
+    const std::optional<quint32> raw = optUInt(row, QStringLiteral("CurrentTemperature"));
+    if (raw.has_value()) {
+        zone.celsius = thermalRawToCelsius(*raw);
+        zone.valid = thermalRawIsValid(*raw);
+    }
+    zone.isBatteryZone = zone.instanceName.contains(QStringLiteral("BAT"), Qt::CaseInsensitive);
+    return zone;
+}
+
+void BatteryReader::applyStaticDataResult(BatterySnapshot &snapshot, bool ok,
+                                          const QList<QVariantMap> &rows, const QString &error)
+{
+    if (ok && !rows.isEmpty()) {
+        m_staticCache = rows;
+        applyStaticRows(snapshot, rows);
+    } else if (!m_staticCache.isEmpty()) {
+        applyStaticRows(snapshot, m_staticCache);
+    } else if (!ok) {
+        snapshot.unavailable << QStringLiteral("BatteryStaticData: %1").arg(error);
+    }
+}
+
+void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
+{
+    if (!m_rootWmiOk) {
+        snapshot.unavailable << QStringLiteral("ROOT\\WMI: %1").arg(m_rootWmi->lastError());
+        return;
+    }
+
+    // BatteryStaticData rides the flaky perf adapter; enumerate with the
+    // CreateInstanceEnum fallback and reuse the cache across transient
+    // failures (the data is static per boot).
+    {
+        bool ok = false;
+        const QList<QVariantMap> rows =
+            m_rootWmi->queryInstances(QStringLiteral("BatteryStaticData"), &ok);
+        applyStaticDataResult(snapshot, ok, rows, m_rootWmi->lastError());
+    }
+
+    const QByteArray classes[] = {
+        QByteArrayLiteral("BatteryFullChargedCapacity"),
+        QByteArrayLiteral("BatteryCycleCount"),
+        QByteArrayLiteral("BatteryStatus"),
+        QByteArrayLiteral("BatteryRuntime"),
+    };
+
+    for (const QByteArray &className : classes) {
+        bool ok = false;
+        const QList<QVariantMap> rows =
+            m_rootWmi->queryInstances(QLatin1String(className), &ok);
+        if (!ok) {
+            snapshot.unavailable << QStringLiteral("%1: %2")
+                                        .arg(QLatin1String(className), m_rootWmi->lastError());
+            continue;
+        }
+        applyRootWmiClassRows(snapshot, className, rows);
+    }
+}
+
+void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
+{
+    if (!m_cimv2Ok) {
+        snapshot.unavailable << QStringLiteral("ROOT\\CIMV2: %1").arg(m_cimv2->lastError());
+        return;
+    }
+
+    bool ok = false;
+    const QList<QVariantMap> win32 =
+        m_cimv2->queryInstances(QStringLiteral("Win32_Battery"), &ok);
+    if (!ok)
+        snapshot.unavailable << QStringLiteral("Win32_Battery: %1").arg(m_cimv2->lastError());
+
+    bool okPortable = false;
+    const QList<QVariantMap> portable =
+        m_cimv2->queryInstances(QStringLiteral("Win32_PortableBattery"), &okPortable);
+    if (!okPortable)
+        snapshot.unavailable << QStringLiteral("Win32_PortableBattery: %1").arg(m_cimv2->lastError());
+
+    applyCimv2Rows(snapshot, win32, portable);
+}
+
 void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
 {
     if (!m_rootWmiOk)
@@ -435,17 +461,8 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
         return;
     }
 
-    for (const QVariantMap &row : rows) {
-        ThermalZone zone;
-        zone.instanceName = optString(row, QStringLiteral("InstanceName"));
-        const std::optional<quint32> raw = optUInt(row, QStringLiteral("CurrentTemperature"));
-        if (raw.has_value()) {
-            zone.celsius = thermalRawToCelsius(*raw);
-            zone.valid = thermalRawIsValid(*raw);
-        }
-        zone.isBatteryZone = zone.instanceName.contains(QStringLiteral("BAT"), Qt::CaseInsensitive);
-        snapshot.thermalZones.append(zone);
-    }
+    for (const QVariantMap &row : rows)
+        snapshot.thermalZones.append(zoneFromRow(row));
 
     resolveTemperature(snapshot);
 }

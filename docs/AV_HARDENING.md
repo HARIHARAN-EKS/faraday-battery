@@ -74,13 +74,38 @@ spawning is the single behavior a heuristic could notice, and it is the
 same class of action the app already performs when it runs the stock
 `powercfg.exe`. Nothing was packed, obfuscated, or hidden to achieve it.
 
-## Measured VirusTotal results — 1.0.5 (all four artifacts)
+## Measured VirusTotal results — 1.0.6, the current release (scanned 2026-07-12)
 
 | Artifact | Result | Flagging engine(s) |
 |---|---|---|
-| `faraday-core.exe` (the application) | **0 detections** | — (Arctic Wolf, Elastic and Trapmine all report it clean) |
+| **`faraday-core.exe`** (the application) | **0 / 70** | — (Arctic Wolf, Elastic and Trapmine all report it clean) |
+| **`Faraday-1.0.6-portable-win64.zip`** (recommended download) | **0 detections** | — (all 117 bundled files 0/N) |
+| `Faraday.exe` (launcher stub) | **1 / 70** | **Arctic Wolf — `Unsafe`** (generic verdict label; no malware family named) |
+| `Faraday-1.0.6-setup-win64.exe` (installer) | **2 / 69** | **Elastic — `Malicious (moderate Confidence)`** (softened from `high`); **Trapmine — `Suspicious.low.ml.score`** |
+
+**The number that mattered: the application stayed clean.** 1.0.6 rebuilt the
+UI as a static QML module (`faradayui`) linked into `faraday-core.exe`, making
+it a genuinely new binary with a new hash — 1.0.5's clean result did **not**
+carry over and could not be assumed. It was re-scanned and came back **0/70**.
+
+**The icon rework changed nothing forensically.** All three PEs had their
+`.rsrc` rewritten (7 `RT_ICON` entries each, one per rendered size). Measured
+`.rsrc` entropy moved by at most 0.02 (launcher 7.96 → 7.96; core 7.93 →
+7.91). **No engine appeared, and none disappeared.**
+
+**No new vendor appeared on any artifact**, and one hit improved on its own:
+Elastic softened from `Malicious (high Confidence)` to `Malicious (moderate
+Confidence)` — with no work done to court it, exactly as Trapmine softened in
+the previous round. Four rounds now say the same thing: these scores move on
+their own schedule, not ours.
+
+### Prior round — 1.0.5, for comparison
+
+| Artifact | Result | Flagging engine(s) |
+|---|---|---|
+| `faraday-core.exe` (the application) | **0 detections** | — |
 | `Faraday-1.0.5-portable-win64.zip` | **0 detections** | — (every bundled runtime file 0/N) |
-| **`Faraday.exe` (launcher, new)** | **1 / 70** | **Arctic Wolf — `Unsafe`** (a generic verdict label; no malware family named) |
+| **`Faraday.exe` (launcher, new)** | **1 / 70** | **Arctic Wolf — `Unsafe`** |
 | `Faraday-1.0.5-setup-win64.exe` | **2 / 69** | **Elastic — `Malicious (high Confidence)` (new)**; **Trapmine — `Suspicious.low.ml.score`** (softened from `Malicious.moderate`) |
 
 Full detail, hashes and permalinks: [VIRUSTOTAL_BASELINE.md](VIRUSTOTAL_BASELINE.md).

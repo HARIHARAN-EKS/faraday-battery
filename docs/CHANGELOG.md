@@ -3,6 +3,38 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.6] — measured AV results (2026-07-12, post-release)
+
+VirusTotal scans of all four 1.0.6 artifacts. **No binaries were changed in
+response** — the scanned hashes remain the shipped hashes. See
+docs/VIRUSTOTAL_BASELINE.md for the full four-version comparison.
+
+- **The application (`faraday-core.exe`): 0 / 70.** This was the open question
+  of the release: the static-QML-module change made it a genuinely new binary,
+  so 1.0.5's clean result did not carry over. **It was re-earned, not
+  inherited.** VirusTotal's own Details tab shows the change (new
+  `_Z26qml_register_types_Faradayv` export, `.text` grown to 733 KB) — and
+  still no engine flags it.
+- **Portable ZIP (the recommended download): 0 detections**, all 117 bundled
+  files 0/N.
+- **Launcher `Faraday.exe`: 1 / 70** — Arctic Wolf, `Unsafe`. Unchanged from
+  1.0.5; generic label, no family named.
+- **Installer: 2 / 69** — Elastic `Malicious (moderate Confidence)` and
+  Trapmine `Suspicious.low.ml.score`. **Elastic softened** from `high` to
+  `moderate` with no work done to court it.
+- **No new vendor appeared on any artifact.** The icon regeneration, which
+  rewrote `.rsrc` on all three PEs, moved measured `.rsrc` entropy by at most
+  0.02 and attracted or shed exactly zero engines.
+- **Behavioural corroboration:** VirusTotal detonated the application and
+  recorded "Network comms: NOT FOUND", no dropped files, no persistence, no
+  services, registry keys read but never written, and MITRE T1047 (WMI) — which
+  is exactly what we document. Recorded honestly in docs/SECURITY_AUDIT.md §5c,
+  *including* the report's `obfuscated` behaviour tag and low-confidence
+  Process Injection capability tag, both of which are static capability
+  inferences with zero corresponding runtime events.
+- FP submissions refreshed for all three vendors with 1.0.6 hashes
+  (docs/FP_SUBMISSIONS/).
+
 ## [1.0.6] — 2026-07-12
 
 Layout and branding fixes. **No behavior changes**, no new capability, no new

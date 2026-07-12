@@ -63,22 +63,14 @@ That dialog is a deliberate design decision, not an apology. A Qt application's 
 
 ## Antivirus — honest and up front
 
-Faraday is **unsigned**, because a code-signing certificate costs money this project does not have. That has a measurable cost, and here it is.
+Faraday is **unsigned**, because a code-signing certificate costs money this project does not have. That has a measurable cost, and here it is — the **1.0.6 binaries, the exact files linked above** (VirusTotal, 2026-07-12):
 
-> **These numbers are the measured results for the 1.0.5 binaries.** 1.0.6
-> rebuilt all four artifacts, so they carry new hashes and are **awaiting a
-> fresh VirusTotal scan** — the results below do not automatically transfer to
-> them. Nothing about the security profile changed (same imports, same
-> manifest, same sections, no packing, still zero network code), but this
-> project does not claim scan results it has not measured. The 1.0.6 hashes are
-> in the Download section above; verify them yourself if you want to check.
-
-| File (1.0.5) | Result | Flagged by |
+| File (1.0.6) | Result | Flagged by |
 |---|---|---|
-| **`faraday-core.exe`** — the actual application | **0 detections** | — |
-| **Portable ZIP** — the recommended download | **0 detections** | — (every bundled file 0/N) |
+| **`faraday-core.exe`** — the actual application | **0 / 70** | — |
+| **Portable ZIP** — the recommended download | **0 detections** | — (all 117 bundled files 0/N) |
 | `Faraday.exe` — the launcher stub | 1 / 70 | Arctic Wolf: `Unsafe` |
-| `Faraday-1.0.5-setup-win64.exe` — the installer | 2 / 69 | Elastic: `Malicious (high Confidence)`; Trapmine: `Suspicious.low.ml.score` |
+| `Faraday-1.0.6-setup-win64.exe` — the installer | 2 / 69 | Elastic: `Malicious (moderate Confidence)`; Trapmine: `Suspicious.low.ml.score` |
 
 **Every engine that flags a wrapper clears its contents.** Arctic Wolf reports the application the launcher starts as clean. Elastic and Trapmine report every single file the installer writes to disk — and the identical payload delivered as a ZIP — as clean. All three labels are generic ML/heuristic scores; not one names a malware family.
 
@@ -86,12 +78,16 @@ Why the wrappers score at all: the launcher is a tiny (130 KB), statically linke
 
 **If your AV objects, use the portable ZIP** — it has no installer stub and scans clean end to end.
 
-- [Application `faraday-core.exe` — 0 detections](https://www.virustotal.com/gui/file/f92311e9c60f98a2b9128a2f2b5984e184a97cb4a612f379a1a815af339dae7b)
-- [Portable ZIP — 0 detections](https://www.virustotal.com/gui/file/f81074358f0d64c2312e120c5ae598af297ebdfd51dce785e305e8971d3029fe)
-- [Launcher `Faraday.exe`](https://www.virustotal.com/gui/file/a3f6ca32a3889e91842bec8fd8878d1aa8873061b42314852cadc82dbd75f9d1)
-- [Installer](https://www.virustotal.com/gui/file/8007b30a8a3f0eac779aa2df6ed5dcf7a751f437bbe030b47afd2e6888ee7a2d)
+Sandbox traces corroborate this from the outside. VirusTotal detonated the application and recorded **"Network comms: NOT FOUND"**, no dropped files, no persistence, no services, and registry keys **read but never written**. The one MITRE technique with any substance behind it is *Windows Management Instrumentation* — which is exactly, and only, what Faraday documents doing: read-only battery queries.
 
-The scan reports themselves are in [`VirusTotal/3/`](VirusTotal/3), the analysis in [`docs/VIRUSTOTAL_BASELINE.md`](docs/VIRUSTOTAL_BASELINE.md), and ready-to-send false-positive reports for each vendor in [`docs/FP_SUBMISSIONS/`](docs/FP_SUBMISSIONS). The hardening is documented and verifiable: no packing, no obfuscation, zero network code, `asInvoker` manifest, no registry writes by the application, read-only hardware access.
+Two things in those reports we'll state ourselves rather than let you find them: the application carries an `obfuscated` behaviour tag and a low-confidence *Process Injection* capability tag. Faraday does neither. The first comes from high-entropy resources — our icons are PNGs, and PNG is already compressed; the `.text` section where obfuscation would actually live measures 5.97, nowhere near a packer's 7.9+. The second is inferred from process APIs that Qt itself uses, with **zero** matching runtime events in the trace. These are static *capability guesses*, not observed behaviour, and the observed-behaviour sections of the same report are empty. [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) §5 walks through both.
+
+- [Application `faraday-core.exe` — 0 / 70](https://www.virustotal.com/gui/file/8a03d15232cad5b3ed40e68398a0f0aeffd7ab25ee5fcdf66327440583018b98)
+- [Portable ZIP — 0 detections](https://www.virustotal.com/gui/file/45bba4d0c258a14db5304e8a15cac4c56cfdbd6d14565bb0a6d5aa638a7fb115)
+- [Launcher `Faraday.exe` — 1 / 70](https://www.virustotal.com/gui/file/211b530c377e9d6b34e34342fc90a76c2907e7de6747dbdc15c51488f3806987)
+- [Installer — 2 / 69](https://www.virustotal.com/gui/file/be732f69f387412ec8bd79df4499f04ddd6b640115187714c6bf544c3b66406b)
+
+The scan reports themselves are in [`VirusTotal/4/`](VirusTotal/4), the four-version comparison in [`docs/VIRUSTOTAL_BASELINE.md`](docs/VIRUSTOTAL_BASELINE.md), and ready-to-send false-positive reports for each vendor in [`docs/FP_SUBMISSIONS/`](docs/FP_SUBMISSIONS). The hardening is documented and verifiable: no packing, no obfuscation, zero network code, `asInvoker` manifest, no registry writes by the application, read-only hardware access.
 
 ---
 

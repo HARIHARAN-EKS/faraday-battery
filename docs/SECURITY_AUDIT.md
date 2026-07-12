@@ -112,6 +112,65 @@ loader reads). **Processes Created: itself only.** MITRE lists *Windows
 Management Instrumentation (T1047)* — which is precisely, and only, what we
 document: read-only WMI battery queries.
 
+### 5c. Re-measured on 1.0.6 (`faraday-core.exe`, `8a03d152…`)
+
+1.0.6's application is a **genuinely new binary** — the UI became a static QML
+module linked into it — so §5b's result did not carry over and had to be
+re-measured. It was, and it reproduces exactly. Detonated by CAPA, CAPE
+Sandbox and Zenbox; **0 / 70 detections**.
+
+| Our claim | VirusTotal sandbox evidence (1.0.6) | Verdict |
+|---|---|---|
+| Zero network calls | **"Network comms: NOT FOUND"**. No DNS, no IPs, no IDS rules matched | **CONFIRMED — externally** |
+| No registry writes | **"Registry Keys Opened"** only: `Session Manager`, `Session Manager\Segment Heap`, `Safer\CodeIdentifiers` — all standard loader reads. **Not one write** | **CONFIRMED — externally** |
+| No dropped files | Dropped Files: **NOT FOUND** | **CONFIRMED — externally** |
+| No persistence, no services | None listed. No Run keys, no scheduled tasks, no services | **CONFIRMED — externally** |
+| Read-only hardware telemetry via WMI | MITRE **T1047 Windows Management Instrumentation** — the only Execution technique with substance, and it is exactly what we document | **CONFIRMED — externally** |
+| No child processes | Processes Created: **itself only** (`faraday-core.exe`, PID 7140) | **CONFIRMED** |
+| Static VersionInfo intact | VT Details: **File Version `1.0.6.0`**, full copyright/product/description | **CONFIRMED** |
+
+**These confirmations are worth more than our own assertions**, and that is
+the point of running them: they are produced by a third party with no stake in
+the answer, from the exact bytes we shipped.
+
+#### What the sandbox says that does NOT flatter us — recorded, not buried
+
+Three items in the 1.0.6 report would look bad quoted out of context. We
+publish them ourselves rather than let someone else "discover" them:
+
+1. **Behaviour tag: `obfuscated`.** Faraday contains no obfuscation of any
+   kind. This tag is driven by high-entropy resources — our icon PNGs sit at
+   entropy 7.47–7.94 because *PNG is already a compressed format*. Any program
+   shipping colour icons scores the same way. The `.text` section, which is
+   where obfuscation would actually live, measures **5.97** — squarely in the
+   normal range for compiled code, and nowhere near a packer's ~7.9+.
+2. **MITRE T1055 "Process Injection" (Privilege Escalation, 1 hit, LOW).**
+   No injection occurs. This is a CAPA-style *capability* heuristic derived
+   from imported process/memory APIs that Qt's own runtime uses; the trace
+   records **zero** corresponding runtime events — no target process, no
+   remote thread, no injected region.
+3. **MBC tree lists "Anti-Behavioral Analysis", "Anti-Static Analysis",
+   "Defense Evasion".** Again capability categories inferred statically, at
+   INFO severity, with no observed behaviour behind any of them. Faraday
+   performs no anti-analysis and no evasion — a claim the reader can check
+   against the source, which is fully public.
+
+The distinction that matters: **MITRE/CAPA/MBC tags on VirusTotal are
+capability *inferences from the binary*, not observed runtime events.** The
+observed-events sections of the same report — network, dropped files,
+registry writes, persistence, injection — are all empty. Where the two
+disagree, the empty trace is the measurement and the tag is the guess.
+
+#### Honest limit of this trace
+
+The sandbox ran `faraday-core.exe` **standalone from the Desktop**, without its
+`app\` runtime alongside it. A Qt application resolves its DLLs in the Windows
+loader, so this run cannot have reached deep into the UI. It therefore proves
+the *absence* of bad behaviour (no network, no writes, no drops) far more
+strongly than it exercises the full application. Our own end-to-end testing
+(§3) covers the real launch path. We are not going to claim a full-detonation
+clean bill from a run that did not fully detonate.
+
 **Every claim in §3 and §4 of this document is corroborated by an
 independent sandbox: no network, no registry writes, no drops, no
 persistence.**

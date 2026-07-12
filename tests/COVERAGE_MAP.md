@@ -1,5 +1,15 @@
 # T1 coverage map — baseline before the deep-verification round
 
+> **T7 closure:** after the round, coverage stands at **line 86 %
+> (2481/2861), branch 54 % (2719/5011)** across **24 suites / 3593 real
+> cases**. Remaining dark spots, all with stated reasons: `main.cpp`
+> (process-level; exercised by the launch/walkthrough/zombie process tests
+> outside the instrumented build), `WmiClient` COM-initialization failure
+> arms (would need process-level COM fault injection), `ChargeCap` Lenovo
+> row-parsing arms (needs Lenovo hardware or a WmiClient DI refactor —
+> known limit), parts of `Autostart` COM error arms. Every other gap from
+> the table below was closed by T2/T3/T7 suites.
+
 Instrumented build: `build-cov` (MinGW `--coverage`, Debug), report via
 gcovr 8.6 over `src/`. Baseline after the existing 16 suites:
 

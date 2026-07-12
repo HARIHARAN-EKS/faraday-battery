@@ -3,6 +3,35 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [Unreleased] — deep-verification round (2026-07-12)
+
+Full test/performance/reliability/security audit of the shipped 1.0.2.
+The shipped binaries were NOT modified (their VirusTotal-scanned hashes
+remain authoritative); all changes live in source/tests for the next
+release.
+
+### Fixed (each with a proving test)
+- `metrics::linearRegression` returned `valid=true` with a NaN slope when
+  any input point was non-finite; now rejects non-finite points.
+- `metrics::degradationCurve` let NaN capacities through its `<= 0` guard
+  into the regression; now filters non-finite values explicitly.
+- `metrics::endOfLifeProjection` reached undefined behavior
+  (`static_cast<qint64>(NaN)` in `addDays`) for non-finite design/threshold
+  inputs; now guarded.
+
+### Added
+- 8 new test suites (24 total, **3593 real cases**): metrics property/
+  boundary suite (1816 generated cases with invariant gates), powercfg XML
+  fuzzing (XXE/entity-bomb inert, byte mutations, truncations, 5 MB
+  reports), WMI row fuzzing via new BatteryReader row-application seams,
+  settings/SQLite abuse, clock-jump handling, performance benchmarks with
+  regression gates, model-path coverage incl. forced AC-transition cycle,
+  TrayManager coverage. Line coverage 77 % → 86 %, branch 46 % → 54 %.
+- `Database::insertSamplesBulk` — transaction-wrapped bulk insert
+  (33.8k rows/s vs 158/s autocommit), rollback-safe.
+- Engineering records: tests/COVERAGE_MAP.md, tests/PERF_RESULTS.md,
+  docs/SECURITY_AUDIT.md, docs/RELIABILITY_RESULTS.md.
+
 ## [1.0.2] — 2026-07-12
 
 AV false-positive response round, driven by measured VirusTotal results

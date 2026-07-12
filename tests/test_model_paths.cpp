@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 
 #include "SyntheticData.h"
+#include "app/AlertManager.h"
 #include "app/BatteryModel.h"
 
 #include <QTemporaryDir>
@@ -200,6 +201,48 @@ private slots:
         const QString result = model.tryToggleChargeCap(true);
         QVERIFY(!result.isEmpty());
         QVERIFY(result != QStringLiteral("Charge cap updated."));
+    }
+
+    void acBatteryTransitionCycle()
+    {
+        // Force-simulated AC<->battery transitions (physically unpluggable
+        // from software): discharge -> plug in -> charge -> full -> unplug.
+        // The model must track every flip; the alert input must follow.
+        BatteryModel model;
+        const QDateTime t0(QDate(2026, 7, 12), QTime(9, 0));
+
+        BatterySnapshot onBattery = synthetic::snapshot({ 10.0 }, 60.0, false);
+        onBattery.timestamp = t0;
+        model.applySnapshot(onBattery);
+        QVERIFY(!model.onAcPower());
+        QVERIFY(!model.charging());
+        QVERIFY(model.currentAlertInput().discharging);
+
+        BatterySnapshot plugged = synthetic::snapshot({ 10.0 }, 60.0, true);
+        plugged.timestamp = t0.addSecs(30);
+        plugged.batteries[0].charging = true;
+        plugged.batteries[0].discharging = false;
+        plugged.batteries[0].chargeRatemW = 20000;
+        model.applySnapshot(plugged);
+        QVERIFY(model.onAcPower());
+        QVERIFY(model.charging());
+        QCOMPARE(model.statusText(), QStringLiteral("Charging"));
+        QVERIFY(model.currentAlertInput().onAcPower);
+
+        BatterySnapshot full = synthetic::snapshot({ 10.0 }, 100.0, true);
+        full.timestamp = t0.addSecs(60);
+        full.batteries[0].charging = false;
+        full.batteries[0].discharging = false;
+        model.applySnapshot(full);
+        QCOMPARE(model.statusText(), QStringLiteral("Fully charged"));
+
+        BatterySnapshot unplugged = synthetic::snapshot({ 10.0 }, 99.0, false);
+        unplugged.timestamp = t0.addSecs(90);
+        model.applySnapshot(unplugged);
+        QVERIFY(!model.onAcPower());
+        QCOMPARE(model.statusText(), QStringLiteral("Discharging"));
+        // The live series spans the whole cycle with finite points.
+        QCOMPARE(model.liveSeries().size(), 4);
     }
 
     void usageLogAndDegradationGuards()

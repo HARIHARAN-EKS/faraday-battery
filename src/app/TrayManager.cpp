@@ -16,7 +16,9 @@ namespace {
 // link the library without the QML/resource module).
 QIcon makeTrayIcon()
 {
-    const QIcon brand(QStringLiteral(":/icons/faraday.png"));
+    // The multi-resolution ICO: the tray renders at 16/24/32 px, where the
+    // purpose-drawn simplified mark reads and the artwork would not.
+    const QIcon brand(QStringLiteral(":/icons/faraday.ico"));
     if (!brand.isNull())
         return brand;
 

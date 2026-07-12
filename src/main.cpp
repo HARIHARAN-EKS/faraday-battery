@@ -15,11 +15,12 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Faraday"));
     app.setOrganizationName(QStringLiteral("Faraday Project"));
-    app.setApplicationVersion(QStringLiteral("1.0.5"));
+    app.setApplicationVersion(QStringLiteral("1.0.6"));
     app.setQuitOnLastWindowClosed(false); // tray keeps us alive
-    // Window + taskbar icon (the brand mark; a dark rounded tile that reads
-    // on both light and dark shells).
-    app.setWindowIcon(QIcon(QStringLiteral(":/icons/faraday.png")));
+    // Window + taskbar icon: the multi-resolution ICO, so Windows picks the
+    // purpose-drawn 16/24/32 px marks for the title bar and taskbar rather
+    // than rescaling one large PNG into mush.
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/faraday.ico")));
 
     faraday::BatteryModel model;
     // Portable ZIP: a portable.txt marker next to the exe keeps all data

@@ -1,5 +1,12 @@
 <RCC>
     <qresource prefix="/icons">
+        <!-- Multi-resolution icon (16..256). Qt's ICO handler exposes every
+             frame, so the window/taskbar/tray pick the right one instead of
+             rescaling a single large PNG. -->
+        <file alias="faraday.ico">faraday.ico</file>
+        <!-- Simplified mark for the in-app sidebar: reads cleanly at ~32px. -->
+        <file alias="faraday_mark.png">faraday_mark.png</file>
+        <!-- Full artwork tile, for large in-app use. -->
         <file alias="faraday.png">faraday.png</file>
     </qresource>
 </RCC>

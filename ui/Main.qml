@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtQuick.Window
 import Faraday
 
 ApplicationWindow {
@@ -54,15 +55,21 @@ ApplicationWindow {
                     Layout.bottomMargin: 18
                     Layout.topMargin: 6
                     spacing: 10
-                    // Brand mark. The asset is a dark rounded tile, so it
-                    // reads correctly against both the dark and light
-                    // sidebar without a second variant.
+                    // Brand mark. Uses the SIMPLIFIED mark, not the detailed
+                    // artwork: at this size the illustration loses its
+                    // silhouette. The asset is a dark rounded tile, so it
+                    // reads on both the dark and light sidebar.
                     Image {
-                        source: "qrc:/icons/faraday.png"
-                        sourceSize.width: 28
-                        sourceSize.height: 28
-                        Layout.preferredWidth: 28
-                        Layout.preferredHeight: 28
+                        id: brandMark
+                        readonly property int slot: 32
+                        source: "qrc:/icons/faraday_mark.png"
+                        // Decode at device resolution (not at the logical slot
+                        // size), so the mark stays crisp on HiDPI displays
+                        // instead of being scaled up from a 32px decode.
+                        sourceSize.width: slot * Math.max(2, Screen.devicePixelRatio)
+                        sourceSize.height: slot * Math.max(2, Screen.devicePixelRatio)
+                        Layout.preferredWidth: slot
+                        Layout.preferredHeight: slot
                         smooth: true
                         mipmap: true
                         fillMode: Image.PreserveAspectFit

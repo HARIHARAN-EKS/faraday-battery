@@ -59,6 +59,9 @@ public:
     // Ingestion
     bool upsertStatic(const BatteryDevice &device, qint64 nowMs);
     bool insertSample(const BatterySnapshot &snapshot);
+    // Transaction-wrapped bulk insert (imports, seeding, benchmarks).
+    // All-or-nothing: rolls back and returns false on any failure.
+    bool insertSamplesBulk(const QList<BatterySnapshot> &snapshots);
     // Inserts powercfg history buckets; duplicates (same start_date+source)
     // are ignored. Returns number of newly inserted rows, -1 on error.
     int ingestCapacityHistory(const QList<PowercfgReportData::HistoryEntry> &entries,

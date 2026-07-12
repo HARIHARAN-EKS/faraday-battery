@@ -279,6 +279,31 @@ bool Database::insertSample(const BatterySnapshot &snapshot)
     return true;
 }
 
+bool Database::insertSamplesBulk(const QList<BatterySnapshot> &snapshots)
+{
+    if (!isOpen()) {
+        m_lastError = QStringLiteral("insertSamplesBulk() on a closed database");
+        return false;
+    }
+    QSqlDatabase database = db();
+    if (!database.transaction()) {
+        m_lastError = database.lastError().text();
+        return false;
+    }
+    for (const BatterySnapshot &snapshot : snapshots) {
+        if (!insertSample(snapshot)) {
+            database.rollback(); // m_lastError already set by insertSample
+            return false;
+        }
+    }
+    if (!database.commit()) {
+        m_lastError = database.lastError().text();
+        database.rollback();
+        return false;
+    }
+    return true;
+}
+
 int Database::ingestCapacityHistory(const QList<PowercfgReportData::HistoryEntry> &entries,
                                     const QString &source)
 {

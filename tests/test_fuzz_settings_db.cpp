@@ -185,6 +185,7 @@ private slots:
         QVERIFY(!db.upsertStatic(dev, 0));
         BatterySnapshot snap;
         QVERIFY(!db.insertSample(snap));
+        QVERIFY(!db.insertSamplesBulk({ snap }));
         QCOMPARE(db.ingestCapacityHistory({}), -1);
         CapacityHistoryRow row;
         QVERIFY(!db.insertCapacityPoint(row));

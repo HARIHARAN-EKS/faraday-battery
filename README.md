@@ -1,6 +1,6 @@
 # Faraday — Battery Intelligence Suite
 
-Windows tells you your battery is at 65 %. Faraday tells you it has permanently lost a third of the capacity it shipped with, projects when it will fall below the service threshold, and explains — in plain language — which of your charging habits is causing it. It reads real firmware telemetry through public read-only Windows interfaces (WMI, `powercfg`, ACPI): no drivers, no elevation, no network, no telemetry.
+Windows tells you your battery is at 65 %. Faraday tells you it has permanently lost a third of the capacity it shipped with, projects when it will fall below its service threshold, and points out the charging habits that accelerate that decline — in plain language. It reads real firmware telemetry through public read-only Windows interfaces (WMI, `powercfg`, ACPI): no drivers, no elevation, no network, no telemetry.
 
 The built-in `powercfg /batteryreport` gives you a static HTML dump of numbers. Faraday gives you a **health verdict**, a **degradation curve with an end-of-life estimate**, **charging-habit insights**, a **longitudinal timeline**, and live monitoring — and it is scrupulously honest about what your hardware does not report.
 

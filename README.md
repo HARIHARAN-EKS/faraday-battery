@@ -14,5 +14,5 @@ Quick start (developers):
 powershell -ExecutionPolicy Bypass -File build.ps1 -Test
 ```
 
-Artifacts: `dist\Faraday-1.0.0-setup-win64.exe` (per-user installer) and
-`dist\Faraday-1.0.0-portable-win64.zip` (portable).
+Artifacts: `dist\Faraday-1.0.1-setup-win64.exe` (per-user installer) and
+`dist\Faraday-1.0.1-portable-win64.zip` (portable).

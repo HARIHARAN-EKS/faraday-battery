@@ -32,8 +32,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Test
 
 `build.ps1` configures with Ninja + the MinGW toolchain
 (`CMAKE_PREFIX_PATH=C:\Qt\6.8.2\mingw_64`), builds, and runs the full ctest
-suite (14 binaries covering acquisition, metrics, persistence, alerts,
-calibration and exports). Warnings are errors (`-Wall -Wextra -Werror`).
+suite (15 binaries covering acquisition, metrics, persistence, alerts,
+calibration, exports and the synthetic degradation harness). Warnings are
+errors (`-Wall -Wextra -Werror`).
 
 Manual equivalent:
 
@@ -48,18 +49,22 @@ ctest --test-dir build --output-on-failure
 ## Release packaging
 
 ```powershell
-# 1. Deploy Qt runtime next to the exe
+# 1. Deploy Qt runtime next to the exe. --skip-plugin-types drops the
+#    network-touching and debug plugins (see AV_HARDENING.md).
 mkdir dist\Faraday
 copy build\faraday.exe dist\Faraday\
 C:\Qt\6.8.2\mingw_64\bin\windeployqt.exe --release --compiler-runtime `
-    --no-translations --qmldir ui dist\Faraday\faraday.exe
+    --no-translations --skip-plugin-types qmltooling,networkinformation,tls,generic `
+    --qmldir ui dist\Faraday\faraday.exe
+Remove-Item dist\Faraday\sqldrivers\qsqlmimer.dll, `
+    dist\Faraday\sqldrivers\qsqlodbc.dll, dist\Faraday\sqldrivers\qsqlpsql.dll
 
 # 2. Portable ZIP
-Compress-Archive dist\Faraday dist\Faraday-1.0.0-portable-win64.zip
+Compress-Archive dist\Faraday dist\Faraday-1.0.1-portable-win64.zip
 
 # 3. Installer (per-user, no elevation)
 & 'C:\Program Files (x86)\NSIS\makensis.exe' installer\faraday.nsi
-#  -> dist\Faraday-1.0.0-setup-win64.exe
+#  -> dist\Faraday-1.0.1-setup-win64.exe
 ```
 
 Release rules (see AV_HARDENING.md): plain Release build, no packer, no

@@ -11,12 +11,42 @@ Queried with `SELECT * FROM <class>` through `IWbemServices::ExecQuery`
 
 | Class | Fields used | Notes / observed failure modes |
 |---|---|---|
-| `BatteryStaticData` | `DesignedCapacity`, `ManufactureName`, `SerialNumber`, `DeviceName` | **Frequently fails without elevation** (`WBEM_E_FAILED` 0x80041001, observed on the reference HP machine). Faraday falls back to powercfg / `Win32_PortableBattery` for design capacity |
+| `BatteryStaticData` | `DesignedCapacity`, `ManufactureName`, `SerialNumber`, `DeviceName`, `UniqueID`, `ManufactureDate` (CIM datetime; all-wildcard when unreported), `Chemistry` (FourCC, e.g. `0x6E6F694C` = "Lion") | **Intermittently fails with `WBEM_E_FAILED` 0x80041001 — see below; this is NOT an elevation requirement.** Faraday retries via `CreateInstanceEnum` and caches the last good rows (static per boot); powercfg backfills when nothing was ever readable |
 | `BatteryFullChargedCapacity` | `FullChargedCapacity` | The primary health input |
 | `BatteryCycleCount` | `CycleCount` | Zero/absent on some firmware |
 | `BatteryStatus` | `RemainingCapacity`, `ChargeRate`, `DischargeRate`, `Voltage`, `PowerOnline`, `Charging`, `Discharging`, `Critical` | The live-telemetry workhorse; rates in mW, voltage in mV |
 | `BatteryRuntime` | `EstimatedRuntime` (s) | `0xFFFFFFFF` = unknown (typical on AC) — treated as absent |
 | `MsAcpi_ThermalZoneTemperature` | `CurrentTemperature` (tenths of Kelvin), `InstanceName` | Many machines expose stub zones frozen at 2732 (0.0 °C) — filtered out. Battery-specific zones (`*BAT*`) are preferred; otherwise the mean of valid zones is a *system* estimate |
+
+### The 0x80041001 finding (verification round)
+
+`BatteryStaticData` inherits from `Win32_PerfRawData` and is served through
+the WMI **performance adapter**, which intermittently returns
+`WBEM_E_FAILED` (0x80041001). During the original build this was observed
+consistently on the reference machine and initially attributed to missing
+elevation. The verification round disproved that:
+
+- `Get-WmiObject` (legacy DCOM/`IWbemServices` path) read the class
+  **unelevated** — full data including `DesignedCapacity` 42581,
+  `ManufactureName` "Hewlett-Packard", serial and `UniqueID`.
+- `Get-CimInstance` (WinRM/CIM path) failed with 0x80041001 on the same
+  machine at the same moment.
+- A minimal C++ probe then showed **every** DCOM enumeration style working
+  (`ExecQuery` forward-only/rewindable/synchronous and `CreateInstanceEnum`),
+  confirming the earlier in-app failures were transient adapter hiccups, not
+  a path or privilege problem.
+
+Resolution (all read-only, still `asInvoker`):
+
+1. `WmiClient::queryInstances()` retries a failed `ExecQuery` through
+   `IWbemServices::CreateInstanceEnum` with a rewindable enumerator.
+2. `BatteryReader` caches the last successful `BatteryStaticData` rows —
+   the data is static per boot — so a transient failure on sample N reuses
+   the cache instead of blanking pack identity, and a failure on the first
+   read simply retries on the next sample.
+3. Fields the pack genuinely does not report (here: `ManufactureDate`, an
+   all-asterisk CIM datetime) render as "Not reported by this hardware" —
+   never blank, zero, or guessed.
 
 ## 2. WMI — ROOT\CIMV2 namespace
 

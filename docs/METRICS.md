@@ -9,11 +9,32 @@ All formulas live in `src/core/Metrics.cpp` and are unit-tested in
 
 | Metric | Formula | Sources |
 |---|---|---|
-| **Health %** | `100 × FullChargedCapacity / DesignedCapacity`, clamped to [0, 100] | FCC: `BatteryFullChargedCapacity` (ROOT\WMI) → powercfg → `Win32_PortableBattery`. Design: `BatteryStaticData` → powercfg → `Win32_PortableBattery` |
+| **Health %** | `100 × FullChargedCapacity / DesignedCapacity`, clamped to [0, 100] | FCC: `BatteryFullChargedCapacity` (ROOT\WMI) → powercfg → `Win32_PortableBattery`. Design: **powercfg** → `BatteryStaticData` → `Win32_PortableBattery` |
 | **Wear %** | `100 − Health %` | same |
 | **Grade** | ≥90 Excellent · ≥80 Good · ≥65 Fair · ≥50 Worn · <50 Replace soon | health % |
 
-Multi-battery systems aggregate: `Σ FCC / Σ design`.
+Multi-battery systems aggregate: `Σ FCC / Σ design`, with each pack resolved
+through its own precedence chain (packs are aligned by ordinal between the
+WMI enumeration and the powercfg report).
+
+## Static identity — source-precedence chains
+
+Every field on the dashboard's *Battery details* panel resolves through an
+explicit, per-field chain (first source that delivered wins; the winning
+source is shown as a tag next to the value). A field no source delivered
+renders as **"Not reported by this hardware"** — never blank, zero, or a
+guess. Implemented in `BatteryModel::resolvedStaticFor()`; asserted in
+`tests/test_battery_model.cpp`.
+
+| Field | Precedence chain | Rationale |
+|---|---|---|
+| **Design capacity** | **powercfg** → `BatteryStaticData` → `Win32_PortableBattery` | powercfg is the firmware figure Windows itself uses; on the reference machine the three sources disagree (42401 / 42581 / 41040 mWh) and `Win32_PortableBattery` is demonstrably stale |
+| **Manufacturer** | `BatteryStaticData` → powercfg → `Win32_PortableBattery` | ACPI static data is authoritative when readable |
+| **Serial number** | `BatteryStaticData` → powercfg | identical firmware string via two transports |
+| **Manufacture date** | `BatteryStaticData` only | no other source carries it; all-wildcard CIM datetimes count as "not reported" |
+| **Chemistry** | `BatteryStaticData` (FourCC, e.g. "Lion") → powercfg token (e.g. "LIon") → CIMV2 enum (1–8) | all three normalize to one display vocabulary (`chemistryFourCCToString` / `normalizeChemistryToken`) |
+| **Unique ID** | `BatteryStaticData.UniqueID` → powercfg battery `id` | |
+| **Device name** | `BatteryStaticData.DeviceName` → `Win32_Battery.Name` → `Win32_PortableBattery.Name` | |
 
 ## Live metrics
 
@@ -23,7 +44,7 @@ Multi-battery systems aggregate: `Σ FCC / Σ design`.
 | **Net power (W)** | `(ChargeRate − DischargeRate) / 1000` — positive charging, negative discharging | `BatteryStatus` |
 | **V·I power** | `(mV × mA) / 10⁶` W — provided for sources exposing current instead of rate | helper only |
 | **Voltage (V)** | `BatteryStatus.Voltage / 1000` | `BatteryStatus` |
-| **Temperature (°C)** | `raw/10 − 273.15` (raw is tenths of Kelvin). Zones with raw ≤ 2732 (≈0 °C firmware stubs) or > 120 °C are discarded. A zone named `*BAT*` wins; otherwise the mean of valid zones is shown as a *system thermal estimate* | `MsAcpi_ThermalZoneTemperature` |
+| **Temperature (°C)** | `raw/10 − 273.15` (raw is tenths of Kelvin). Zones with raw ≤ 2732 (≈0 °C firmware stubs) or > 120 °C are discarded. A zone named `*BAT*` wins and counts as a true battery sensor; otherwise the mean of valid zones is shown as a *system thermal estimate*, flagged as such in the UI (card title, sub-label, tooltip). **The high-temperature alert only arms against a true battery sensor** — on estimate-only machines the threshold is disabled and greyed with the reason | `MsAcpi_ThermalZoneTemperature` |
 | **Cycle count** | direct read; powercfg fallback | `BatteryCycleCount` → powercfg |
 
 ## Time estimates

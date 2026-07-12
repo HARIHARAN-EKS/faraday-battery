@@ -3,6 +3,48 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.1] — 2026-07-12
+
+Verification & hardening round.
+
+### Fixed
+- **`BatteryStaticData` 0x80041001 root-caused** — the failure is a
+  transient WMI performance-adapter hiccup, *not* an elevation requirement
+  (the legacy DCOM path reads the class unelevated). The WMI client now
+  retries via `CreateInstanceEnum`, and the reader caches the last good
+  static rows per boot, so pack identity survives transient failures.
+- **Design-capacity precedence corrected** — powercfg now wins over
+  `BatteryStaticData` and `Win32_PortableBattery` (the three disagree on
+  real hardware: 42401 / 42581 / 41040 mWh), resolved per pack.
+- **Windowless-zombie failsafe** — when the QML runtime cannot come up the
+  engine yields zero root objects without `objectCreationFailed`; the app
+  now exits with code 1 instead of lingering as a background process.
+
+### Added
+- **Battery details panel** — serial number, manufacturer, manufacture
+  date, chemistry, unique ID and design capacity, each with a source tag
+  resolved through a documented per-field precedence chain; unresolvable
+  fields honestly render "Not reported by this hardware".
+- **Chemistry decoding** — `BatteryStaticData.Chemistry` FourCC and
+  powercfg tokens ("LIon", "LiP", …) normalize to one display vocabulary;
+  `ManufactureDate` CIM datetimes are parsed (all-wildcard = not reported).
+- **Temperature honesty** — system-zone estimates are unmistakably labeled
+  (card title, sub-label, tooltip, source text); the high-temperature alert
+  only arms against a true `*BAT*` thermal sensor and is visibly disabled
+  with the reason on estimate-only machines.
+- **Synthetic degradation harness** (test-only) — 15th suite driving wear
+  tiers 0/15/30/40/70 %, amber/red ring states, verdict text per tier,
+  degradation regression + EOL projection, calibration-drift trip/no-trip,
+  per-state drain, degraded multi-pack aggregation and ghost-VM paths.
+
+### Changed
+- **Distribution trimmed** — TLS backends, network-information plugin, QML
+  debug transports (incl. the TCP one), TUIO touch plugin and unused SQL
+  drivers no longer ship. `Qt6Network.dll` removal was attempted and proven
+  impossible (hard static import of `Qt6Qml.dll`/`Qt6Quick.dll`; the loader
+  faults pre-`main`) — documented in AV_HARDENING.md; no deployed code
+  calls it anymore.
+
 ## [1.0.0] — 2026-07-12
 
 First release.

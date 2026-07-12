@@ -50,6 +50,30 @@ zero root objects *without* emitting `objectCreationFailed`, which used to
 leave a windowless background process alive. `main()` now exits with code 1
 when no root object exists.
 
+## The launcher stub (1.0.4) — heuristic-surface impact: none
+
+`faraday.exe` is now a 63 KB launcher that verifies the runtime and then
+starts `faraday-app.exe` (the Qt application). Every hardening rule
+survives, and the change was re-verified from scratch on the 1.0.4 build:
+
+| Property | Launcher | Application | Installer |
+|---|---|---|---|
+| Imports | KERNEL32, USER32, msvcrt **(system only)** | Qt6 + system (unchanged) | stock NSIS set |
+| Network imports | none | none | none |
+| W+X sections | 0 | 0 | 0 |
+| VersionInfo | full | full | full |
+| Manifest | `asInvoker` | `asInvoker` | per-user |
+| Defender scan | no threats | no threats | no threats |
+
+Why this does not raise heuristic surface: the launcher performs one
+`CreateProcess` of a **sibling binary with a fixed name in its own
+directory** — no shell execution, no temp-file drop, no download, no
+injection, no elevation, no registry. It is statically linked (a normal
+`-static` MinGW build, entropy 6.01 in `.text` — not packed). Process
+spawning is the single behavior a heuristic could notice, and it is the
+same class of action the app already performs when it runs the stock
+`powercfg.exe`. Nothing was packed, obfuscated, or hidden to achieve it.
+
 ## Residual heuristics an unsigned app can still trip
 
 - **WMI usage** — Faraday queries battery classes; some heuristics score any

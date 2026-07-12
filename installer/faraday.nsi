@@ -23,7 +23,7 @@
 
 !define PRODUCT_NAME "Faraday"
 !define PRODUCT_FULL_NAME "Faraday - Battery Intelligence Suite"
-!define PRODUCT_VERSION "1.0.3"
+!define PRODUCT_VERSION "1.0.4"
 !define PRODUCT_PUBLISHER "Faraday Project"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Faraday"
 
@@ -68,7 +68,7 @@ VIAddVersionKey "InternalName" "faraday-setup"
 !insertmacro MUI_LANGUAGE "English"
 
 ; Post-copy payload verification (D2): the install must never complete
-; with a partial runtime — that is exactly the state that produced the
+; with a partial runtime - that is exactly the state that produced the
 ; field loader failure.
 !macro VerifyInstalled FILE
   IfFileExists "$INSTDIR\${FILE}" +3 0

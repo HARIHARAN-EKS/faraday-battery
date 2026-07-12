@@ -60,23 +60,32 @@ when no root object exists.
 - **Unsigned binary** — the single biggest factor, unavoidable without a
   certificate.
 
-## Measured VirusTotal results — release 1.0.1 (2026-07-12)
+## Measured VirusTotal results — two release rounds (2026-07-12)
 
-The prediction above was tested against reality. Full details, hashes and
-links: [VIRUSTOTAL_BASELINE.md](VIRUSTOTAL_BASELINE.md).
+The predictions above were tested against reality twice. Full details,
+hashes and links: [VIRUSTOTAL_BASELINE.md](VIRUSTOTAL_BASELINE.md).
 
-| Artifact | Result |
-|---|---|
-| `faraday.exe` (payload) | **0 / 70 — clean, no vendor flagged it** |
-| all 102 files dropped by the installer | **0 detections on every file** |
-| `Faraday-1.0.1-setup-win64.exe` (NSIS wrapper) | **1 / 69** — Trapmine only |
+| Artifact | 1.0.1 | 1.0.2 |
+|---|---|---|
+| `faraday.exe` (payload) | **0 / 70** | **0 / 70 — stayed clean; Trapmine itself reports Undetected** |
+| every file inside the distribution | 0 detections (102 dropped files) | 0 detections (all bundled files) |
+| portable ZIP (recommended channel) | not scanned | **0 detections** |
+| NSIS installer wrapper | 1 / 69 — Trapmine | 1 / 68 — Trapmine, unchanged |
 
-The single detection was **Trapmine: `Malicious.moderate.ml.score`** — by
-its own name a machine-learning score bucket, not a named malware family,
-and corroborated by none of the other 68 engines (Microsoft, Kaspersky,
-BitDefender, ESET, Sophos, CrowdStrike, Elastic all clean). Classification:
-**generic ML false positive on the unsigned NSIS installer wrapper**. The
-application itself and every byte it installs are measurably clean.
+The only detection across both rounds is **Trapmine:
+`Malicious.moderate.ml.score`** — by its own name a machine-learning score
+bucket, not a named malware family, corroborated by none of the other ~68
+engines (Microsoft, Kaspersky, BitDefender, ESET, Sophos, CrowdStrike,
+Elastic all clean, both rounds). Classification: **generic ML false
+positive on the unsigned NSIS installer wrapper.** A ready-to-send FP
+report lives in `FP_SUBMISSIONS/Trapmine.md`.
+
+The 1.0.2 round is also the controlled experiment for the mitigation list
+below: the full hygiene pass (MUI2, complete VersionInfo, manifests,
+zero-Exec) did **not** move Trapmine's ML verdict on the wrapper, while the
+payload — carrying all the same new code — stayed at 0/70. That is direct
+evidence the residual score keys on the unsigned stub itself, not on
+anything Faraday does.
 
 ### Mitigations applied in 1.0.2 (legitimate build hygiene only)
 
@@ -111,11 +120,14 @@ no signature games, nothing hidden:
 An **unsigned** installer stub will always carry some residual
 generic-heuristic risk: reputation systems key on code signatures, and no
 code-signing certificate is available to this project. Everything listed
-above is the complete set of free, honest mitigations; beyond it, the
-false-positive surface of the installer **cannot be materially improved
-without a paid certificate** (OV/EV signing or Azure Trusted Signing).
-Users who cannot accept that residual risk should use the portable ZIP,
-whose contents are individually verified clean.
+above is the complete set of free, honest mitigations — and the 1.0.2
+scan measured their effect: **zero movement** on the one ML engine that
+scores the unsigned stub. The conclusion is now empirical, not
+theoretical: the installer's false-positive surface **cannot be materially
+improved without a paid certificate** (OV/EV signing or Azure Trusted
+Signing). Users who cannot accept that residual risk should use the
+portable ZIP — scanned 0-detection as a whole and file-by-file — which is
+the project's primary recommended download.
 
 ## Scan protocol for future releases
 

@@ -11,6 +11,21 @@ for 1.0.1: application exe **0/70 (clean)**, all 102 installed files
 `Malicious.moderate.ml.score` — a generic ML bucket, no named family).
 Baseline with hashes: docs/VIRUSTOTAL_BASELINE.md.
 
+### Release close-out (measured 1.0.2 scans + audit)
+- VirusTotal, 1.0.2 artifacts: application exe **0/70 (stayed clean —
+  Trapmine itself reports Undetected)**; portable ZIP **0 detections**
+  (whole archive and every bundled file); installer **1/68** — the same
+  single Trapmine ML-bucket hit, unmoved by the full hygiene pass, which
+  empirically confirms the unsigned-stub structural limit.
+- Ship-readiness audit (docs/SHIP_READINESS.md): 16/16 suites; automated
+  click-through of all six screens on both the release and portable
+  builds with zero QML errors/warnings; live-value and
+  honest-degradation states verified intact. **Shipped as-is; binaries
+  unchanged so the scanned hashes remain authoritative.**
+- Docs: two-round comparison in VIRUSTOTAL_BASELINE.md; ready-to-send FP
+  report in FP_SUBMISSIONS/Trapmine.md; README now leads with the
+  portable ZIP as the primary download.
+
 ### Added
 - **Portable mode** — a `portable.txt` marker beside `faraday.exe` (shipped
   in the ZIP) keeps all settings and history in an app-local `data` folder,

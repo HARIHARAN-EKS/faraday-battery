@@ -41,6 +41,58 @@ private slots:
         QVERIFY(BatteryReader::chemistryToString(99).isEmpty());
     }
 
+    void chemistryFourCC()
+    {
+        // 0x6E6F694C = 'L','i','o','n' little-endian (observed on real HP hardware).
+        QCOMPARE(BatteryReader::chemistryFourCCToString(0x6E6F694Cu),
+                 QStringLiteral("Lithium-ion"));
+        // "LiP " (with trailing space trimmed by normalize) and "PbAc"
+        QCOMPARE(BatteryReader::chemistryFourCCToString(0x0050694Cu), // "LiP\0"
+                 QStringLiteral("Lithium Polymer"));
+        QCOMPARE(BatteryReader::chemistryFourCCToString(0x63416250u), // "PbAc"
+                 QStringLiteral("Lead Acid"));
+        QVERIFY(BatteryReader::chemistryFourCCToString(0).isEmpty());
+        // Non-printable garbage must not be guessed at.
+        QVERIFY(BatteryReader::chemistryFourCCToString(0x01020304u).isEmpty());
+        // Unknown but printable token passes through verbatim.
+        QCOMPARE(BatteryReader::chemistryFourCCToString(0x44434241u), // "ABCD"
+                 QStringLiteral("ABCD"));
+    }
+
+    void chemistryTokenNormalization()
+    {
+        QCOMPARE(BatteryReader::normalizeChemistryToken(QStringLiteral("LIon")),
+                 QStringLiteral("Lithium-ion"));
+        QCOMPARE(BatteryReader::normalizeChemistryToken(QStringLiteral("Lion")),
+                 QStringLiteral("Lithium-ion"));
+        QCOMPARE(BatteryReader::normalizeChemistryToken(QStringLiteral("LiP")),
+                 QStringLiteral("Lithium Polymer"));
+        QCOMPARE(BatteryReader::normalizeChemistryToken(QStringLiteral("NiMH")),
+                 QStringLiteral("Nickel Metal Hydride"));
+        QVERIFY(BatteryReader::normalizeChemistryToken(QString()).isEmpty());
+        QCOMPARE(BatteryReader::normalizeChemistryToken(QStringLiteral("Exotic")),
+                 QStringLiteral("Exotic"));
+    }
+
+    void manufactureDateParsing()
+    {
+        // Valid CIM datetime.
+        QCOMPARE(BatteryReader::manufactureDateToIso(
+                     QStringLiteral("20250821000000.000000+000")),
+                 QStringLiteral("2025-08-21"));
+        // All-wildcard datetime (the common "not reported" shape, observed
+        // on the reference machine) parses to empty — never a guess.
+        QVERIFY(BatteryReader::manufactureDateToIso(
+                    QStringLiteral("**************.**********")).isEmpty());
+        QVERIFY(BatteryReader::manufactureDateToIso(QString()).isEmpty());
+        QVERIFY(BatteryReader::manufactureDateToIso(QStringLiteral("garbage")).isEmpty());
+        // Implausible year and invalid month/day are rejected.
+        QVERIFY(BatteryReader::manufactureDateToIso(
+                    QStringLiteral("19000101000000.000000+000")).isEmpty());
+        QVERIFY(BatteryReader::manufactureDateToIso(
+                    QStringLiteral("20251340000000.000000+000")).isEmpty());
+    }
+
     void win32StatusMapping()
     {
         QCOMPARE(BatteryReader::win32StatusToString(1), QStringLiteral("Discharging"));

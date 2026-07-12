@@ -147,6 +147,57 @@ bool WmiClient::connect(const QString &wmiNamespace)
     return true;
 }
 
+bool WmiClient::drainEnumerator(IEnumWbemClassObject *enumerator, const QString &context,
+                                QList<QVariantMap> &rows)
+{
+    bool enumerationFailed = false;
+    for (;;) {
+        IWbemClassObject *obj = nullptr;
+        ULONG returned = 0;
+        const HRESULT hr = enumerator->Next(static_cast<long>(WBEM_INFINITE), 1, &obj, &returned);
+        if (FAILED(hr)) {
+            // e.g. WBEM_E_INVALID_CLASS for a missing class, or the
+            // intermittent WBEM_E_FAILED from perf-adapter classes.
+            m_lastError = QStringLiteral("Enumeration failed for '%1': %2")
+                              .arg(context, hresultToString(hr));
+            enumerationFailed = true;
+            break;
+        }
+        if (hr == WBEM_S_FALSE || returned == 0)
+            break;
+        if (!obj)
+            continue;
+
+        QVariantMap row;
+        if (SUCCEEDED(obj->BeginEnumeration(WBEM_FLAG_LOCAL_ONLY))) {
+            for (;;) {
+                BSTR propName = nullptr;
+                VARIANT value;
+                VariantInit(&value);
+                const HRESULT hrNext = obj->Next(0, &propName, &value, nullptr, nullptr);
+                if (hrNext != WBEM_S_NO_ERROR) {
+                    VariantClear(&value);
+                    if (propName)
+                        SysFreeString(propName);
+                    break;
+                }
+                if (propName) {
+                    const QVariant qv = variantToQVariant(value);
+                    if (qv.isValid())
+                        row.insert(QString::fromWCharArray(propName), qv);
+                    SysFreeString(propName);
+                }
+                VariantClear(&value);
+            }
+            obj->EndEnumeration();
+        }
+        obj->Release();
+        rows.append(row);
+    }
+    enumerator->Release();
+    return !enumerationFailed;
+}
+
 QList<QVariantMap> WmiClient::query(const QString &wql, bool *ok)
 {
     QList<QVariantMap> results;
@@ -182,58 +233,63 @@ QList<QVariantMap> WmiClient::query(const QString &wql, bool *ok)
         return results;
     }
 
-    bool enumerationFailed = false;
-    for (;;) {
-        IWbemClassObject *obj = nullptr;
-        ULONG returned = 0;
-        hr = enumerator->Next(static_cast<long>(WBEM_INFINITE), 1, &obj, &returned);
-        if (FAILED(hr)) {
-            // e.g. WBEM_E_INVALID_CLASS for a missing class, or
-            // WBEM_E_FAILED from BatteryStaticData without elevation.
-            m_lastError = QStringLiteral("Enumeration failed for '%1': %2")
-                              .arg(wql, hresultToString(hr));
-            enumerationFailed = true;
-            break;
-        }
-        if (hr == WBEM_S_FALSE || returned == 0)
-            break;
-        if (!obj)
-            continue;
+    if (!drainEnumerator(enumerator, wql, results))
+        return results;
 
-        QVariantMap row;
-        if (SUCCEEDED(obj->BeginEnumeration(WBEM_FLAG_LOCAL_ONLY))) {
-            for (;;) {
-                BSTR propName = nullptr;
-                VARIANT value;
-                VariantInit(&value);
-                const HRESULT hrNext = obj->Next(0, &propName, &value, nullptr, nullptr);
-                if (hrNext != WBEM_S_NO_ERROR) {
-                    VariantClear(&value);
-                    if (propName)
-                        SysFreeString(propName);
-                    break;
-                }
-                if (propName) {
-                    const QVariant qv = variantToQVariant(value);
-                    if (qv.isValid())
-                        row.insert(QString::fromWCharArray(propName), qv);
-                    SysFreeString(propName);
-                }
-                VariantClear(&value);
-            }
-            obj->EndEnumeration();
-        }
-        obj->Release();
-        results.append(row);
-    }
-    enumerator->Release();
+    if (ok)
+        *ok = true;
+    m_lastError.clear();
+    return results;
+}
 
-    if (!enumerationFailed) {
+QList<QVariantMap> WmiClient::queryInstances(const QString &className, bool *ok)
+{
+    bool queryOk = false;
+    QList<QVariantMap> results =
+        query(QStringLiteral("SELECT * FROM %1").arg(className), &queryOk);
+    if (queryOk) {
         if (ok)
             *ok = true;
-        m_lastError.clear();
+        return results;
     }
-    return results;
+
+    if (ok)
+        *ok = false;
+    if (!m_services)
+        return {};
+
+    // Retry through direct instance enumeration with a rewindable
+    // (non-forward-only) enumerator; see the header for why this can
+    // succeed where the query path intermittently fails.
+    const QString firstError = m_lastError;
+
+    BSTR cls = SysAllocString(reinterpret_cast<const wchar_t *>(className.utf16()));
+    if (!cls) {
+        m_lastError = QStringLiteral("SysAllocString failed (out of memory)");
+        return {};
+    }
+
+    IEnumWbemClassObject *enumerator = nullptr;
+    const HRESULT hr =
+        m_services->CreateInstanceEnum(cls, WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &enumerator);
+    SysFreeString(cls);
+
+    if (FAILED(hr) || !enumerator) {
+        m_lastError = QStringLiteral("%1; CreateInstanceEnum retry failed: %2")
+                          .arg(firstError, hresultToString(hr));
+        return {};
+    }
+
+    QList<QVariantMap> retryResults;
+    if (!drainEnumerator(enumerator, className, retryResults)) {
+        m_lastError = QStringLiteral("%1; retry: %2").arg(firstError, m_lastError);
+        return {};
+    }
+
+    if (ok)
+        *ok = true;
+    m_lastError.clear();
+    return retryResults;
 }
 
 } // namespace faraday

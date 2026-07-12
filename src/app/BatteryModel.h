@@ -52,6 +52,10 @@ class BatteryModel : public QObject
     Q_PROPERTY(QStringList habitInsights READ habitInsights NOTIFY reportChanged)
 
     // Detail / diagnostics
+    // Per-pack static identity resolved through an explicit source-precedence
+    // chain (powercfg wins on design capacity; BatteryStaticData wins on
+    // identity fields). Rows: pack, field, value, source, available.
+    Q_PROPERTY(QVariantList staticInfo READ staticInfo NOTIFY staticInfoChanged)
     Q_PROPERTY(QVariantList batteries READ batteries NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantList rawStreams READ rawStreams NOTIFY snapshotChanged)
     Q_PROPERTY(QStringList unavailableSources READ unavailableSources NOTIFY snapshotChanged)
@@ -116,6 +120,7 @@ public:
     QStringList verdictDetails() const;
     QStringList habitInsights() const { return m_habitInsights; }
 
+    QVariantList staticInfo() const;
     QVariantList batteries() const;
     QVariantList rawStreams() const;
     QStringList unavailableSources() const { return m_snapshot.unavailable; }
@@ -183,6 +188,7 @@ public:
 
 signals:
     void snapshotChanged();
+    void staticInfoChanged();
     void reportChanged();
     void liveSeriesChanged();
     void settingsChanged();
@@ -196,6 +202,12 @@ private:
     void appendLivePoint(const BatterySnapshot &snapshot);
     const BatteryDevice *primary() const;
     Verdict currentVerdict() const;
+
+    // Source-precedence resolution for one pack (see METRICS.md):
+    // keys: name, manufacturer, serialNumber, manufactureDate, chemistry,
+    // uniqueId, designCapacitymWh — each paired with <key>Source.
+    QVariantMap resolvedStaticFor(int index) const;
+    qint64 resolvedDesignForPack(int index) const;
 
     void probeChargeCapAsync();
 

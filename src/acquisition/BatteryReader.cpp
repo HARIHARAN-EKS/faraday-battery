@@ -99,6 +99,73 @@ QString BatteryReader::chemistryToString(int code)
     }
 }
 
+QString BatteryReader::normalizeChemistryToken(const QString &token)
+{
+    const QString t = token.trimmed();
+    if (t.isEmpty())
+        return QString();
+    const QString upper = t.toUpper();
+    if (upper == QLatin1String("LION") || upper == QLatin1String("LI-I")
+        || upper == QLatin1String("LI I") || upper == QLatin1String("LIION"))
+        return QStringLiteral("Lithium-ion");
+    if (upper == QLatin1String("LIP") || upper == QLatin1String("LIPO"))
+        return QStringLiteral("Lithium Polymer");
+    if (upper == QLatin1String("PBAC"))
+        return QStringLiteral("Lead Acid");
+    if (upper == QLatin1String("NICD"))
+        return QStringLiteral("Nickel Cadmium");
+    if (upper == QLatin1String("NIMH"))
+        return QStringLiteral("Nickel Metal Hydride");
+    if (upper == QLatin1String("NIZN"))
+        return QStringLiteral("Nickel Zinc");
+    if (upper == QLatin1String("RAM"))
+        return QStringLiteral("Rechargeable Alkaline");
+    // Unknown but real hardware token: pass it through rather than guess.
+    return t;
+}
+
+QString BatteryReader::chemistryFourCCToString(quint32 code)
+{
+    if (code == 0)
+        return QString();
+    // Little-endian packed ASCII, e.g. 0x6E6F694C -> 'L','i','o','n'.
+    QString ascii;
+    for (int shift = 0; shift <= 24; shift += 8) {
+        const char c = static_cast<char>((code >> shift) & 0xFFu);
+        if (c == '\0')
+            break;
+        if (c < 0x20 || c > 0x7E)
+            return QString(); // not a printable FourCC; refuse to guess
+        ascii.append(QLatin1Char(c));
+    }
+    if (ascii.isEmpty())
+        return QString();
+    return normalizeChemistryToken(ascii);
+}
+
+QString BatteryReader::manufactureDateToIso(const QString &cimDateTime)
+{
+    // CIM datetime: "yyyymmddHHMMSS.mmmmmm+UUU"; unknown fields are '*'.
+    const QString s = cimDateTime.trimmed();
+    if (s.size() < 8)
+        return QString();
+    const QString yearStr = s.left(4);
+    const QString monthStr = s.mid(4, 2);
+    const QString dayStr = s.mid(6, 2);
+    bool okY = false, okM = false, okD = false;
+    const int year = yearStr.toInt(&okY);
+    const int month = monthStr.toInt(&okM);
+    const int day = dayStr.toInt(&okD);
+    if (!okY || !okM || !okD)
+        return QString(); // asterisks or garbage: the pack reports no date
+    if (!QDate(year, month, day).isValid() || year < 1990 || year > 2100)
+        return QString();
+    return QStringLiteral("%1-%2-%3")
+        .arg(year, 4, 10, QLatin1Char('0'))
+        .arg(month, 2, 10, QLatin1Char('0'))
+        .arg(day, 2, 10, QLatin1Char('0'));
+}
+
 QString BatteryReader::win32StatusToString(int code)
 {
     switch (code) {
@@ -143,6 +210,53 @@ BatteryDevice &BatteryReader::deviceFor(BatterySnapshot &snapshot, const QString
     return snapshot.batteries.last();
 }
 
+void BatteryReader::applyStaticRows(BatterySnapshot &snapshot, const QList<QVariantMap> &rows)
+{
+    for (const QVariantMap &row : rows) {
+        const QString instance = optString(row, QStringLiteral("InstanceName"));
+        if (instance.isEmpty())
+            continue;
+        BatteryDevice &dev = deviceFor(snapshot, instance);
+
+        const QString kStatic = QStringLiteral("BatteryStaticData");
+        dev.designedCapacitymWh = optUInt(row, QStringLiteral("DesignedCapacity"));
+        if (dev.designedCapacitymWh.has_value())
+            dev.fieldSources.insert(QStringLiteral("designCapacity"), kStatic);
+        const QString mfg = optString(row, QStringLiteral("ManufactureName"));
+        if (!mfg.isEmpty()) {
+            dev.manufacturer = mfg;
+            dev.fieldSources.insert(QStringLiteral("manufacturer"), kStatic);
+        }
+        const QString serial = optString(row, QStringLiteral("SerialNumber"));
+        if (!serial.isEmpty()) {
+            dev.serialNumber = serial;
+            dev.fieldSources.insert(QStringLiteral("serialNumber"), kStatic);
+        }
+        const QString devName = optString(row, QStringLiteral("DeviceName"));
+        if (!devName.isEmpty()) {
+            dev.name = devName;
+            dev.fieldSources.insert(QStringLiteral("name"), kStatic);
+        }
+        const QString uid = optString(row, QStringLiteral("UniqueID"));
+        if (!uid.isEmpty()) {
+            dev.uniqueId = uid;
+            dev.fieldSources.insert(QStringLiteral("uniqueId"), kStatic);
+        }
+        dev.manufactureDate =
+            manufactureDateToIso(optString(row, QStringLiteral("ManufactureDate")));
+        if (!dev.manufactureDate.isEmpty())
+            dev.fieldSources.insert(QStringLiteral("manufactureDate"), kStatic);
+        const std::optional<quint32> chemCode = optUInt(row, QStringLiteral("Chemistry"));
+        if (chemCode.has_value()) {
+            const QString chem = chemistryFourCCToString(*chemCode);
+            if (!chem.isEmpty()) {
+                dev.chemistry = chem;
+                dev.fieldSources.insert(QStringLiteral("chemistry"), kStatic);
+            }
+        }
+    }
+}
+
 void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
 {
     if (!m_rootWmiOk) {
@@ -150,14 +264,29 @@ void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
         return;
     }
 
+    // BatteryStaticData rides the flaky perf adapter; enumerate with the
+    // CreateInstanceEnum fallback and reuse the cache across transient
+    // failures (the data is static per boot).
+    {
+        bool ok = false;
+        const QList<QVariantMap> rows =
+            m_rootWmi->queryInstances(QStringLiteral("BatteryStaticData"), &ok);
+        if (ok && !rows.isEmpty()) {
+            m_staticCache = rows;
+            applyStaticRows(snapshot, rows);
+        } else if (!m_staticCache.isEmpty()) {
+            applyStaticRows(snapshot, m_staticCache);
+        } else if (!ok) {
+            snapshot.unavailable << QStringLiteral("BatteryStaticData: %1")
+                                        .arg(m_rootWmi->lastError());
+        }
+    }
+
     struct ClassSpec {
         const char *className;
         const char *label;
     };
-    // BatteryStaticData frequently fails without elevation ("Generic
-    // failure"); each class is fetched and recorded independently.
     const ClassSpec classes[] = {
-        { "BatteryStaticData", "BatteryStaticData" },
         { "BatteryFullChargedCapacity", "BatteryFullChargedCapacity" },
         { "BatteryCycleCount", "BatteryCycleCount" },
         { "BatteryStatus", "BatteryStatus" },
@@ -167,7 +296,7 @@ void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
     for (const ClassSpec &spec : classes) {
         bool ok = false;
         const QList<QVariantMap> rows =
-            m_rootWmi->query(QStringLiteral("SELECT * FROM %1").arg(QLatin1String(spec.className)), &ok);
+            m_rootWmi->queryInstances(QLatin1String(spec.className), &ok);
         if (!ok) {
             snapshot.unavailable << QStringLiteral("%1: %2")
                                         .arg(QLatin1String(spec.label), m_rootWmi->lastError());
@@ -179,18 +308,7 @@ void BatteryReader::mergeRootWmi(BatterySnapshot &snapshot)
                 continue;
             BatteryDevice &dev = deviceFor(snapshot, instance);
 
-            if (qstrcmp(spec.className, "BatteryStaticData") == 0) {
-                dev.designedCapacitymWh = optUInt(row, QStringLiteral("DesignedCapacity"));
-                const QString mfg = optString(row, QStringLiteral("ManufactureName"));
-                if (!mfg.isEmpty())
-                    dev.manufacturer = mfg;
-                const QString serial = optString(row, QStringLiteral("SerialNumber"));
-                if (!serial.isEmpty())
-                    dev.serialNumber = serial;
-                const QString devName = optString(row, QStringLiteral("DeviceName"));
-                if (!devName.isEmpty())
-                    dev.name = devName;
-            } else if (qstrcmp(spec.className, "BatteryFullChargedCapacity") == 0) {
+            if (qstrcmp(spec.className, "BatteryFullChargedCapacity") == 0) {
                 dev.fullChargedCapacitymWh = optUInt(row, QStringLiteral("FullChargedCapacity"));
             } else if (qstrcmp(spec.className, "BatteryCycleCount") == 0) {
                 dev.cycleCount = optUInt(row, QStringLiteral("CycleCount"));
@@ -220,13 +338,13 @@ void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
 
     bool ok = false;
     const QList<QVariantMap> win32 =
-        m_cimv2->query(QStringLiteral("SELECT * FROM Win32_Battery"), &ok);
+        m_cimv2->queryInstances(QStringLiteral("Win32_Battery"), &ok);
     if (!ok)
         snapshot.unavailable << QStringLiteral("Win32_Battery: %1").arg(m_cimv2->lastError());
 
     bool okPortable = false;
     const QList<QVariantMap> portable =
-        m_cimv2->query(QStringLiteral("SELECT * FROM Win32_PortableBattery"), &okPortable);
+        m_cimv2->queryInstances(QStringLiteral("Win32_PortableBattery"), &okPortable);
     if (!okPortable)
         snapshot.unavailable << QStringLiteral("Win32_PortableBattery: %1").arg(m_cimv2->lastError());
 
@@ -250,8 +368,12 @@ void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
 
         if (i < win32.size()) {
             const QVariantMap &row = win32.at(i);
-            if (dev->name.isEmpty())
+            const QString kWin32 = QStringLiteral("Win32_Battery");
+            if (dev->name.isEmpty()) {
                 dev->name = optString(row, QStringLiteral("Name"));
+                if (!dev->name.isEmpty())
+                    dev->fieldSources.insert(QStringLiteral("name"), kWin32);
+            }
             dev->win32Status = optInt(row, QStringLiteral("BatteryStatus"));
             dev->estimatedChargeRemainingPct =
                 optInt(row, QStringLiteral("EstimatedChargeRemaining"));
@@ -259,25 +381,41 @@ void BatteryReader::mergeCimv2(BatterySnapshot &snapshot)
                 dev->designVoltagemV = optUInt(row, QStringLiteral("DesignVoltage"));
             if (dev->chemistry.isEmpty()) {
                 const std::optional<qint32> chem = optInt(row, QStringLiteral("Chemistry"));
-                if (chem.has_value())
+                if (chem.has_value()) {
                     dev->chemistry = chemistryToString(*chem);
+                    if (!dev->chemistry.isEmpty())
+                        dev->fieldSources.insert(QStringLiteral("chemistry"), kWin32);
+                }
             }
         }
 
         if (i < portable.size()) {
             const QVariantMap &row = portable.at(i);
-            if (dev->manufacturer.isEmpty())
+            const QString kPortable = QStringLiteral("Win32_PortableBattery");
+            if (dev->manufacturer.isEmpty()) {
                 dev->manufacturer = optString(row, QStringLiteral("Manufacturer"));
-            if (dev->name.isEmpty())
+                if (!dev->manufacturer.isEmpty())
+                    dev->fieldSources.insert(QStringLiteral("manufacturer"), kPortable);
+            }
+            if (dev->name.isEmpty()) {
                 dev->name = optString(row, QStringLiteral("Name"));
-            if (!dev->designedCapacitymWh.has_value())
+                if (!dev->name.isEmpty())
+                    dev->fieldSources.insert(QStringLiteral("name"), kPortable);
+            }
+            if (!dev->designedCapacitymWh.has_value()) {
                 dev->designedCapacitymWh = optUInt(row, QStringLiteral("DesignCapacity"));
+                if (dev->designedCapacitymWh.has_value())
+                    dev->fieldSources.insert(QStringLiteral("designCapacity"), kPortable);
+            }
             if (!dev->fullChargedCapacitymWh.has_value())
                 dev->fullChargedCapacitymWh = optUInt(row, QStringLiteral("FullChargeCapacity"));
             if (dev->chemistry.isEmpty()) {
                 const std::optional<qint32> chem = optInt(row, QStringLiteral("Chemistry"));
-                if (chem.has_value())
+                if (chem.has_value()) {
                     dev->chemistry = chemistryToString(*chem);
+                    if (!dev->chemistry.isEmpty())
+                        dev->fieldSources.insert(QStringLiteral("chemistry"), kPortable);
+                }
             }
         }
     }
@@ -289,8 +427,8 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
         return; // already reported by mergeRootWmi
 
     bool ok = false;
-    const QList<QVariantMap> rows = m_rootWmi->query(
-        QStringLiteral("SELECT * FROM MsAcpi_ThermalZoneTemperature"), &ok);
+    const QList<QVariantMap> rows =
+        m_rootWmi->queryInstances(QStringLiteral("MsAcpi_ThermalZoneTemperature"), &ok);
     if (!ok) {
         snapshot.unavailable << QStringLiteral("MsAcpi_ThermalZoneTemperature: %1")
                                     .arg(m_rootWmi->lastError());
@@ -321,10 +459,12 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
 
     if (batteryZoneTemp.has_value()) {
         snapshot.temperatureC = batteryZoneTemp;
+        snapshot.temperatureIsEstimate = false;
     } else if (validCount > 0) {
         // No battery-specific zone exposed: report the mean of the valid
-        // ACPI zones as a system thermal estimate.
+        // ACPI zones as a system thermal estimate, and say so.
         snapshot.temperatureC = validSum / validCount;
+        snapshot.temperatureIsEstimate = true;
     } else if (!rows.isEmpty()) {
         snapshot.unavailable << QStringLiteral("MsAcpi_ThermalZoneTemperature: only stub zones present");
     } else {

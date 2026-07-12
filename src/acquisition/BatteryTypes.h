@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QHash>
 #include <QList>
 #include <QMetaType>
 #include <QString>
@@ -21,6 +22,8 @@ struct BatteryDevice
     QString manufacturer;
     QString serialNumber;
     QString chemistry;
+    QString manufactureDate;  // ISO yyyy-MM-dd; empty when the pack reports none
+    QString uniqueId;         // BatteryStaticData.UniqueID
     std::optional<quint32> designedCapacitymWh;    // BatteryStaticData.DesignedCapacity
     std::optional<quint32> fullChargedCapacitymWh; // BatteryFullChargedCapacity
     std::optional<quint32> cycleCount;             // BatteryCycleCount
@@ -38,6 +41,11 @@ struct BatteryDevice
     std::optional<quint32> estimatedRuntimeSec;    // BatteryRuntime (sentinel-filtered)
     std::optional<int>     win32Status;            // Win32_Battery.BatteryStatus 1..11
     std::optional<int>     estimatedChargeRemainingPct;
+
+    // Which WMI class supplied each static field (key = field name, e.g.
+    // "manufacturer" -> "BatteryStaticData"). Used for the source-precedence
+    // resolution and the honest source labels in the UI.
+    QHash<QString, QString> fieldSources;
 };
 
 struct ThermalZone
@@ -55,6 +63,7 @@ struct BatterySnapshot
     QList<BatteryDevice> batteries;
     QList<ThermalZone> thermalZones;
     std::optional<double> temperatureC;  // battery zone if present, else system estimate
+    bool temperatureIsEstimate = false;  // true when no valid *BAT* zone backed the value
     QStringList unavailable;             // human-readable list of failed sources
 };
 

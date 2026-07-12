@@ -6,6 +6,7 @@
 
 struct IWbemLocator;
 struct IWbemServices;
+struct IEnumWbemClassObject;
 
 namespace faraday {
 
@@ -33,8 +34,21 @@ public:
     // an existing class with zero instances yields *ok == true and an empty list.
     QList<QVariantMap> query(const QString &wql, bool *ok = nullptr);
 
+    // Enumerates all instances of a class ("SELECT * FROM <className>").
+    // Tries ExecQuery first; if the provider fails mid-enumeration it retries
+    // through IWbemServices::CreateInstanceEnum with a rewindable enumerator.
+    // Rationale: classes in the Win32_PerfRawData hierarchy (BatteryStaticData
+    // et al.) are served through the performance adapter, which intermittently
+    // returns WBEM_E_FAILED (0x80041001) on the query path while direct
+    // instance enumeration succeeds — observed and verified on real hardware.
+    QList<QVariantMap> queryInstances(const QString &className, bool *ok = nullptr);
+
 private:
     void release();
+    // Drains an enumerator into rows. Returns false (and sets m_lastError)
+    // if enumeration itself fails; the enumerator is always released.
+    bool drainEnumerator(IEnumWbemClassObject *enumerator, const QString &context,
+                         QList<QVariantMap> &rows);
 
     IWbemLocator *m_locator = nullptr;
     IWbemServices *m_services = nullptr;

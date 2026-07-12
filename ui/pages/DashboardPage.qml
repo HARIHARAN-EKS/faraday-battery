@@ -289,6 +289,72 @@ Item {
                 }
             }
 
+            // Battery details: per-pack static identity with per-field source
+            // attribution; fields the hardware does not report say so honestly.
+            Rectangle {
+                Layout.fillWidth: true
+                visible: battery.staticInfo.length > 0
+                color: Theme.surface
+                border.color: Theme.border
+                border.width: 1
+                radius: Theme.radius
+                implicitHeight: staticCol.implicitHeight + 32
+
+                ColumnLayout {
+                    id: staticCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+                    spacing: 4
+
+                    Text {
+                        text: qsTr("BATTERY DETAILS")
+                        color: Theme.textDim
+                        font.pixelSize: 12
+                        font.letterSpacing: 1.2
+                    }
+
+                    Repeater {
+                        model: battery.staticInfo
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Text {
+                                Layout.preferredWidth: 200
+                                text: (modelData.packLabel.length > 0
+                                       ? modelData.packLabel + "  ·  " : "") + modelData.field
+                                color: Theme.textDim
+                                font.pixelSize: 13
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.available
+                                      ? modelData.value
+                                      : qsTr("Not reported by this hardware")
+                                color: modelData.available ? Theme.text : Theme.textDim
+                                font.pixelSize: 13
+                                font.italic: !modelData.available
+                                elide: Text.ElideRight
+                            }
+                            Rectangle {
+                                visible: modelData.available && modelData.source.length > 0
+                                radius: 4
+                                color: Qt.alpha(Theme.accent, 0.12)
+                                implicitWidth: srcText.implicitWidth + 12
+                                implicitHeight: srcText.implicitHeight + 4
+                                Text {
+                                    id: srcText
+                                    anchors.centerIn: parent
+                                    text: modelData.source
+                                    color: Theme.accent
+                                    font.pixelSize: 10
+                                    font.family: "Consolas"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Multiple batteries
             Repeater {
                 model: battery.batteries.length > 1 ? battery.batteries : []

@@ -158,6 +158,7 @@ void BatteryModel::applySnapshot(const BatterySnapshot &snapshot)
     }
 
     emit snapshotChanged();
+    emit staticInfoChanged();
 }
 
 void BatteryModel::applyReport(const PowercfgReportData &report)
@@ -179,6 +180,7 @@ void BatteryModel::applyReport(const PowercfgReportData &report)
     }
     emit reportChanged();
     emit snapshotChanged(); // report can improve design capacity / cycles
+    emit staticInfoChanged();
 }
 
 void BatteryModel::appendLivePoint(const BatterySnapshot &snapshot)
@@ -345,19 +347,32 @@ double BatteryModel::voltageV() const
     return -1.0;
 }
 
+qint64 BatteryModel::resolvedDesignForPack(int index) const
+{
+    // Design-capacity precedence: powercfg > BatteryStaticData >
+    // Win32_PortableBattery. powercfg wins because the firmware's own
+    // report is the value Windows itself uses, and Win32_PortableBattery
+    // has been observed to disagree with it on real hardware.
+    if (m_report.ok && index < m_report.batteries.size()) {
+        const auto &info = m_report.batteries.at(index);
+        if (info.designCapacitymWh.has_value() && *info.designCapacitymWh > 0)
+            return *info.designCapacitymWh;
+    }
+    if (index < m_snapshot.batteries.size()) {
+        const BatteryDevice &b = m_snapshot.batteries.at(index);
+        if (b.designedCapacitymWh.has_value() && *b.designedCapacitymWh > 0)
+            return static_cast<qint64>(*b.designedCapacitymWh);
+    }
+    return 0;
+}
+
 qint64 BatteryModel::designCapacitymWh() const
 {
+    const int packs = qMax(m_snapshot.batteries.size(),
+                           m_report.ok ? m_report.batteries.size() : 0);
     qint64 total = 0;
-    for (const BatteryDevice &b : m_snapshot.batteries) {
-        if (b.designedCapacitymWh.has_value() && *b.designedCapacitymWh > 0)
-            total += *b.designedCapacitymWh;
-    }
-    if (total > 0)
-        return total;
-    if (m_report.ok) {
-        for (const auto &b : m_report.batteries)
-            total += b.designCapacitymWh.value_or(0);
-    }
+    for (int i = 0; i < packs; ++i)
+        total += resolvedDesignForPack(i);
     return total > 0 ? total : -1;
 }
 
@@ -506,6 +521,141 @@ QStringList BatteryModel::verdictDetails() const
     return currentVerdict().details;
 }
 
+QVariantMap BatteryModel::resolvedStaticFor(int index) const
+{
+    QVariantMap out;
+    const BatteryDevice *dev =
+        index < m_snapshot.batteries.size() ? &m_snapshot.batteries.at(index) : nullptr;
+    const PowercfgReportData::BatteryInfo *info =
+        (m_report.ok && index < m_report.batteries.size()) ? &m_report.batteries.at(index)
+                                                           : nullptr;
+
+    auto source = [dev](const char *field) {
+        return dev ? dev->fieldSources.value(QLatin1String(field)) : QString();
+    };
+    auto put = [&out](const char *key, const QString &value, const QString &src) {
+        out.insert(QLatin1String(key), value);
+        out.insert(QLatin1String(key) + QStringLiteral("Source"),
+                   value.isEmpty() ? QString() : src);
+    };
+
+    // Identity fields: BatteryStaticData is authoritative when it delivered;
+    // powercfg is next (same firmware data, different transport); the CIMV2
+    // classes are last-resort metadata.
+    const QString kPowercfg = QStringLiteral("powercfg");
+
+    QString name = dev ? dev->name : QString();
+    put("name", name, source("name"));
+
+    QString manufacturer, manufacturerSrc;
+    if (dev && !dev->manufacturer.isEmpty()
+        && source("manufacturer") == QLatin1String("BatteryStaticData")) {
+        manufacturer = dev->manufacturer;
+        manufacturerSrc = source("manufacturer");
+    } else if (info && !info->manufacturer.isEmpty()) {
+        manufacturer = info->manufacturer;
+        manufacturerSrc = kPowercfg;
+    } else if (dev && !dev->manufacturer.isEmpty()) {
+        manufacturer = dev->manufacturer;
+        manufacturerSrc = source("manufacturer");
+    }
+    put("manufacturer", manufacturer, manufacturerSrc);
+
+    QString serial, serialSrc;
+    if (dev && !dev->serialNumber.isEmpty()) {
+        serial = dev->serialNumber;
+        serialSrc = source("serialNumber");
+    } else if (info && !info->serialNumber.isEmpty()) {
+        serial = info->serialNumber;
+        serialSrc = kPowercfg;
+    }
+    put("serialNumber", serial, serialSrc);
+
+    // Only BatteryStaticData carries a manufacture date; packs commonly
+    // report an all-wildcard CIM datetime, which parses to empty here.
+    put("manufactureDate", dev ? dev->manufactureDate : QString(),
+        source("manufactureDate"));
+
+    QString chemistry, chemistrySrc;
+    if (dev && !dev->chemistry.isEmpty()
+        && source("chemistry") == QLatin1String("BatteryStaticData")) {
+        chemistry = dev->chemistry;
+        chemistrySrc = source("chemistry");
+    } else if (info && !info->chemistry.isEmpty()) {
+        chemistry = BatteryReader::normalizeChemistryToken(info->chemistry);
+        chemistrySrc = kPowercfg;
+    } else if (dev && !dev->chemistry.isEmpty()) {
+        chemistry = dev->chemistry;
+        chemistrySrc = source("chemistry");
+    }
+    put("chemistry", chemistry, chemistrySrc);
+
+    QString uniqueId, uniqueIdSrc;
+    if (dev && !dev->uniqueId.isEmpty()) {
+        uniqueId = dev->uniqueId;
+        uniqueIdSrc = source("uniqueId");
+    } else if (info && !info->id.isEmpty()) {
+        uniqueId = info->id;
+        uniqueIdSrc = kPowercfg;
+    }
+    put("uniqueId", uniqueId, uniqueIdSrc);
+
+    const qint64 design = resolvedDesignForPack(index);
+    out.insert(QStringLiteral("designCapacitymWh"), design > 0 ? QVariant(design) : QVariant());
+    QString designSrc;
+    if (design > 0) {
+        if (info && info->designCapacitymWh.has_value() && *info->designCapacitymWh == design)
+            designSrc = kPowercfg;
+        else
+            designSrc = source("designCapacity");
+    }
+    out.insert(QStringLiteral("designCapacitymWhSource"), designSrc);
+    return out;
+}
+
+QVariantList BatteryModel::staticInfo() const
+{
+    QVariantList rows;
+    const int packs = qMax(m_snapshot.batteries.size(),
+                           m_report.ok ? m_report.batteries.size() : 0);
+
+    for (int i = 0; i < packs; ++i) {
+        const QVariantMap resolved = resolvedStaticFor(i);
+        auto addRow = [&rows, &resolved, i, packs](const char *key, const QString &label,
+                                                   const QString &displayOverride) {
+            const QString value = displayOverride.isEmpty()
+                                      ? resolved.value(QLatin1String(key)).toString()
+                                      : displayOverride;
+            const bool available = !resolved.value(QLatin1String(key)).isNull()
+                                   && resolved.value(QLatin1String(key)).isValid()
+                                   && !resolved.value(QLatin1String(key)).toString().isEmpty();
+            QVariantMap row;
+            row.insert(QStringLiteral("pack"), i);
+            row.insert(QStringLiteral("packLabel"),
+                       packs > 1 ? tr("Pack %1").arg(i + 1) : QString());
+            row.insert(QStringLiteral("field"), label);
+            row.insert(QStringLiteral("value"), available ? value : QString());
+            row.insert(QStringLiteral("source"),
+                       resolved.value(QLatin1String(key) + QStringLiteral("Source")).toString());
+            row.insert(QStringLiteral("available"), available);
+            rows.append(row);
+        };
+
+        addRow("name", tr("Device name"), QString());
+        addRow("manufacturer", tr("Manufacturer"), QString());
+        addRow("serialNumber", tr("Serial number"), QString());
+        addRow("manufactureDate", tr("Manufacture date"), QString());
+        addRow("chemistry", tr("Chemistry"), QString());
+        addRow("uniqueId", tr("Unique ID"), QString());
+        const QVariant design = resolved.value(QStringLiteral("designCapacitymWh"));
+        addRow("designCapacitymWh", tr("Design capacity"),
+               design.isValid() && design.toLongLong() > 0
+                   ? formatEnergy(design.toDouble())
+                   : QString());
+    }
+    return rows;
+}
+
 QVariantList BatteryModel::batteries() const
 {
     QVariantList list;
@@ -516,6 +666,8 @@ QVariantList BatteryModel::batteries() const
         map.insert(QStringLiteral("manufacturer"), b.manufacturer);
         map.insert(QStringLiteral("serialNumber"), b.serialNumber);
         map.insert(QStringLiteral("chemistry"), b.chemistry);
+        map.insert(QStringLiteral("manufactureDate"), b.manufactureDate);
+        map.insert(QStringLiteral("uniqueId"), b.uniqueId);
         map.insert(QStringLiteral("designCapacitymWh"), optToVariant(b.designedCapacitymWh));
         map.insert(QStringLiteral("fullChargeCapacitymWh"),
                    optToVariant(b.fullChargedCapacitymWh));
@@ -567,6 +719,10 @@ QVariantList BatteryModel::rawStreams() const
         add(src, QStringLiteral("EstimatedChargeRemaining (%)"),
             b.estimatedChargeRemainingPct.has_value()
                 ? QVariant(*b.estimatedChargeRemainingPct) : QVariant());
+        add(src, QStringLiteral("ManufactureDate"),
+            b.manufactureDate.isEmpty() ? QVariant() : QVariant(b.manufactureDate));
+        add(src, QStringLiteral("UniqueID"),
+            b.uniqueId.isEmpty() ? QVariant() : QVariant(b.uniqueId));
     }
     for (const ThermalZone &zone : m_snapshot.thermalZones) {
         add(zone.instanceName, QStringLiteral("Temperature (°C)"),
@@ -930,12 +1086,12 @@ QString BatteryModel::exportHtmlReport()
     ReportInput input;
     input.appVersion = QCoreApplication::applicationVersion();
     input.generatedAt = QDateTime::currentDateTime();
-    const BatteryDevice *dev = primary();
-    if (dev) {
-        input.batteryName = dev->name;
-        input.manufacturer = dev->manufacturer;
-        input.chemistry = dev->chemistry;
-        input.serialNumber = dev->serialNumber;
+    if (!m_snapshot.batteries.isEmpty() || (m_report.ok && !m_report.batteries.isEmpty())) {
+        const QVariantMap resolved = resolvedStaticFor(0);
+        input.batteryName = resolved.value(QStringLiteral("name")).toString();
+        input.manufacturer = resolved.value(QStringLiteral("manufacturer")).toString();
+        input.chemistry = resolved.value(QStringLiteral("chemistry")).toString();
+        input.serialNumber = resolved.value(QStringLiteral("serialNumber")).toString();
     }
     input.healthPercent = healthPercent();
     input.wearPercent = wearPercent();

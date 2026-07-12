@@ -121,6 +121,122 @@ private slots:
         QCOMPARE(model.healthPercent(), 100.0);
     }
 
+    void powercfgWinsOnDesignCapacity()
+    {
+        // Precedence: powercfg > BatteryStaticData > Win32_PortableBattery.
+        // On the reference machine the three sources disagree (42401 /
+        // 42581 / 41040); the firmware's own report must win.
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot();
+        snap.batteries[0].designedCapacitymWh = 42581; // BatteryStaticData value
+        model.applySnapshot(snap);
+        QCOMPARE(model.designCapacitymWh(), qint64(42581)); // no report yet
+
+        PowercfgReportData report;
+        report.ok = true;
+        PowercfgReportData::BatteryInfo info;
+        info.designCapacitymWh = 42401;
+        report.batteries.append(info);
+        model.applyReport(report);
+        QCOMPARE(model.designCapacitymWh(), qint64(42401)); // powercfg wins
+    }
+
+    void staticInfoResolvesWithSources()
+    {
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot();
+        BatteryDevice &dev = snap.batteries[0];
+        dev.manufacturer = QStringLiteral("Hewlett-Packard");
+        dev.serialNumber = QStringLiteral("32872 08/21/2025");
+        dev.chemistry = QStringLiteral("Lithium-ion");
+        dev.uniqueId = QStringLiteral("32872 08/21/2025Hewlett-PackardPrimary");
+        dev.manufactureDate.clear(); // pack reports no date
+        dev.fieldSources.insert(QStringLiteral("manufacturer"),
+                                QStringLiteral("BatteryStaticData"));
+        dev.fieldSources.insert(QStringLiteral("serialNumber"),
+                                QStringLiteral("BatteryStaticData"));
+        dev.fieldSources.insert(QStringLiteral("chemistry"),
+                                QStringLiteral("BatteryStaticData"));
+        dev.fieldSources.insert(QStringLiteral("uniqueId"),
+                                QStringLiteral("BatteryStaticData"));
+
+        QSignalSpy staticSpy(&model, &BatteryModel::staticInfoChanged);
+        model.applySnapshot(snap);
+        QCOMPARE(staticSpy.count(), 1);
+
+        const QVariantList rows = model.staticInfo();
+        QCOMPARE(rows.size(), 7); // name, mfr, serial, date, chem, uid, design
+
+        QHash<QString, QVariantMap> byField;
+        for (const QVariant &v : rows) {
+            const QVariantMap m = v.toMap();
+            byField.insert(m.value(QStringLiteral("field")).toString(), m);
+        }
+
+        const QVariantMap mfr = byField.value(QStringLiteral("Manufacturer"));
+        QVERIFY(mfr.value(QStringLiteral("available")).toBool());
+        QCOMPARE(mfr.value(QStringLiteral("value")).toString(),
+                 QStringLiteral("Hewlett-Packard"));
+        QCOMPARE(mfr.value(QStringLiteral("source")).toString(),
+                 QStringLiteral("BatteryStaticData"));
+
+        // Absent manufacture date: honestly unavailable, no value, no source.
+        const QVariantMap date = byField.value(QStringLiteral("Manufacture date"));
+        QVERIFY(!date.value(QStringLiteral("available")).toBool());
+        QVERIFY(date.value(QStringLiteral("value")).toString().isEmpty());
+        QVERIFY(date.value(QStringLiteral("source")).toString().isEmpty());
+
+        const QVariantMap serial = byField.value(QStringLiteral("Serial number"));
+        QVERIFY(serial.value(QStringLiteral("available")).toBool());
+        QCOMPARE(serial.value(QStringLiteral("value")).toString(),
+                 QStringLiteral("32872 08/21/2025"));
+    }
+
+    void staticInfoFallsBackToPowercfg()
+    {
+        // With BatteryStaticData absent (its historic failure mode), the
+        // identity fields must resolve from the powercfg report — and the
+        // source labels must say so.
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot(); // no static identity set
+        model.applySnapshot(snap);
+
+        PowercfgReportData report;
+        report.ok = true;
+        PowercfgReportData::BatteryInfo info;
+        info.id = QStringLiteral("Primary");
+        info.manufacturer = QStringLiteral("Hewlett-Packard");
+        info.serialNumber = QStringLiteral("32872 08/21/2025");
+        info.chemistry = QStringLiteral("LIon");
+        info.designCapacitymWh = 42401;
+        report.batteries.append(info);
+        model.applyReport(report);
+
+        QHash<QString, QVariantMap> byField;
+        for (const QVariant &v : model.staticInfo()) {
+            const QVariantMap m = v.toMap();
+            byField.insert(m.value(QStringLiteral("field")).toString(), m);
+        }
+        QCOMPARE(byField.value(QStringLiteral("Manufacturer"))
+                     .value(QStringLiteral("value")).toString(),
+                 QStringLiteral("Hewlett-Packard"));
+        QCOMPARE(byField.value(QStringLiteral("Manufacturer"))
+                     .value(QStringLiteral("source")).toString(),
+                 QStringLiteral("powercfg"));
+        // powercfg chemistry token is normalized for display.
+        QCOMPARE(byField.value(QStringLiteral("Chemistry"))
+                     .value(QStringLiteral("value")).toString(),
+                 QStringLiteral("Lithium-ion"));
+        QCOMPARE(byField.value(QStringLiteral("Unique ID"))
+                     .value(QStringLiteral("value")).toString(),
+                 QStringLiteral("Primary"));
+        QVERIFY(byField.value(QStringLiteral("Design capacity"))
+                    .value(QStringLiteral("available")).toBool());
+        QCOMPARE(byField.value(QStringLiteral("Design capacity"))
+                     .value(QStringLiteral("source")).toString(),
+                 QStringLiteral("powercfg"));
+    }
+
     void liveSeriesAccumulates()
     {
         BatteryModel model;

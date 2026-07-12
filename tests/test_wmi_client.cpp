@@ -57,6 +57,56 @@ private slots:
         QVERIFY(rows.isEmpty());
     }
 
+    void queryInstancesMatchesQuery()
+    {
+        WmiClient client;
+        QVERIFY(client.connect(QStringLiteral("ROOT\\CIMV2")));
+        bool ok = false;
+        const auto rows = client.queryInstances(QStringLiteral("Win32_OperatingSystem"), &ok);
+        QVERIFY2(ok, qPrintable(client.lastError()));
+        QCOMPARE(rows.size(), 1);
+        QVERIFY(rows.first().contains(QStringLiteral("Caption")));
+    }
+
+    void queryInstancesMissingClassFailsCleanly()
+    {
+        // Both the query path AND the CreateInstanceEnum retry must fail
+        // for a class that does not exist, without crashing.
+        WmiClient client;
+        QVERIFY(client.connect(QStringLiteral("ROOT\\CIMV2")));
+        bool ok = true;
+        const auto rows = client.queryInstances(QStringLiteral("Faraday_DoesNotExist"), &ok);
+        QVERIFY(!ok);
+        QVERIFY(rows.isEmpty());
+        QVERIFY(!client.lastError().isEmpty());
+    }
+
+    void queryInstancesWithoutConnectionFailsCleanly()
+    {
+        WmiClient client;
+        bool ok = true;
+        const auto rows = client.queryInstances(QStringLiteral("Win32_Battery"), &ok);
+        QVERIFY(!ok);
+        QVERIFY(rows.isEmpty());
+    }
+
+    void batteryStaticDataThroughFallbackPath()
+    {
+        // The class this whole mechanism exists for. On any machine the call
+        // must complete cleanly; on battery hardware where the perf adapter
+        // cooperates it must yield the design capacity.
+        WmiClient wmi;
+        if (!wmi.connect(QStringLiteral("ROOT\\WMI")))
+            QSKIP("ROOT\\WMI unavailable on this machine");
+        bool ok = false;
+        const auto rows = wmi.queryInstances(QStringLiteral("BatteryStaticData"), &ok);
+        if (ok && !rows.isEmpty()) {
+            QVERIFY(rows.first().contains(QStringLiteral("InstanceName")));
+            QVERIFY(rows.first().value(QStringLiteral("DesignedCapacity")).toUInt() > 0);
+        }
+        QVERIFY(true); // clean failure is acceptable; crashing is not
+    }
+
     void batteryClassesNeverCrash()
     {
         // Whatever this machine is (laptop, desktop, VM), enumerating the

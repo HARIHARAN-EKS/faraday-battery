@@ -1,4 +1,5 @@
 #include "app/BatteryModel.h"
+#include "app/PortableMode.h"
 #include "app/TrayManager.h"
 
 #include <QApplication>
@@ -17,7 +18,11 @@ int main(int argc, char *argv[])
     app.setQuitOnLastWindowClosed(false); // tray keeps us alive
 
     faraday::BatteryModel model;
-    model.initialize();
+    // Portable ZIP: a portable.txt marker next to the exe keeps all data
+    // in <exeDir>\data so the app travels with its folder (USB included).
+    // Empty means the default per-user location.
+    model.initialize(
+        faraday::PortableMode::dataDirFor(QCoreApplication::applicationDirPath()));
 
     // English is the source language; other languages load from the
     // embedded :/i18n resources when their .qm ships.

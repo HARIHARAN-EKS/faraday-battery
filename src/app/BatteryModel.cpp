@@ -10,6 +10,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QPointer>
 #include <QStandardPaths>
 #include <QThreadPool>
@@ -65,6 +66,11 @@ void BatteryModel::initialize(const QString &dataDir)
 
     m_settings = Settings(m_dataDir);
     m_settings.load(); // falls back to defaults if missing/corrupt
+    // First run: persist the defaults immediately so the data directory is
+    // complete from the start (matters for the portable ZIP, where the
+    // folder itself is the whole footprint).
+    if (!QFileInfo::exists(QDir(m_dataDir).filePath(QStringLiteral("settings.json"))))
+        m_settings.save();
 
     if (m_database.open(QDir(m_dataDir).filePath(QStringLiteral("faraday.sqlite"))))
         m_database.initSchema();

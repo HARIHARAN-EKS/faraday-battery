@@ -63,6 +63,8 @@ qt_add_library(faradaylib STATIC
     src/app/Calibration.cpp
     src/app/Exporter.h
     src/app/Exporter.cpp
+    src/app/PortableMode.h
+    src/app/PortableMode.cpp
 )
 target_include_directories(faradaylib PUBLIC src)
 target_link_libraries(faradaylib PUBLIC

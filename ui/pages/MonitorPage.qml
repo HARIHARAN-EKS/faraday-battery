@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Faraday
@@ -9,6 +9,10 @@ Item {
     // Visible time window in seconds; 0 = whole session.
     property real windowSec: 0
     property var trend: ({ valid: false })
+
+    // Axis labels are drawn inside the Canvas; reserving one font-height of
+    // top padding keeps the topmost label clear of the canvas edge.
+    readonly property int axisFontPx: 10
 
     function refreshTrend() { trend = battery.liveTrend() }
 
@@ -143,6 +147,9 @@ Item {
         }
 
         // ---- Chart ----
+        // The legend and the plot are ROWS of a ColumnLayout, not overlapping
+        // siblings: the layout guarantees the 100 % gridline, its axis label
+        // and any data at full charge can never run underneath the legend.
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -151,29 +158,68 @@ Item {
             border.width: 1
             radius: Theme.radius
 
-            Canvas {
-                id: chart
+            ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 10
-                antialiasing: true
+                spacing: 6
 
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
-
-                function fmtTime(sec) {
-                    sec = Math.max(0, Math.round(sec))
-                    const h = Math.floor(sec / 3600)
-                    const m = Math.floor((sec % 3600) / 60)
-                    const s = sec % 60
-                    if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
-                    return m + ":" + String(s).padStart(2, "0")
+                // Legend: a real layout row that reserves its own height, so it
+                // can never sit on top of the plot area below it.
+                Row {
+                    objectName: "chartLegend"
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignRight
+                    spacing: 14
+                    Repeater {
+                        model: [
+                            { c: battery.charging ? Theme.good : Theme.accent, t: qsTr("Charge level") },
+                            { c: Theme.accent, t: qsTr("Trend") },
+                            { c: Theme.warn, t: qsTr("Expected discharge") },
+                            { c: Theme.bad, t: qsTr("Critical draw") }
+                        ]
+                        Row {
+                            spacing: 5
+                            Rectangle {
+                                width: 10; height: 3; radius: 1.5
+                                color: modelData.c
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Text {
+                                text: modelData.t
+                                color: Theme.textDim
+                                font.pixelSize: 10
+                            }
+                        }
+                    }
                 }
 
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.reset()
-                    const W = width, H = height
-                    const padL = 44, padR = 16, padT = 14, padB = 30
+                Canvas {
+                    id: chart
+                    objectName: "liveChart"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    antialiasing: true
+
+                    onWidthChanged: requestPaint()
+                    onHeightChanged: requestPaint()
+
+                    function fmtTime(sec) {
+                        sec = Math.max(0, Math.round(sec))
+                        const h = Math.floor(sec / 3600)
+                        const m = Math.floor((sec % 3600) / 60)
+                        const s = sec % 60
+                        if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
+                        return m + ":" + String(s).padStart(2, "0")
+                    }
+
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        const W = width, H = height
+                        // padT reserves one axis-label height so the 100 % label
+                        // is never clipped by the canvas edge. Nothing else can
+                        // intrude here: the legend is a separate layout row.
+                        const padL = 44, padR = 16, padT = page.axisFontPx, padB = 30
                     const plotW = W - padL - padR
                     const plotH = H - padT - padB
                     if (plotW <= 10 || plotH <= 10)
@@ -195,7 +241,7 @@ Item {
                     ctx.strokeStyle = Theme.chartGrid
                     ctx.fillStyle = Theme.textDim
                     ctx.lineWidth = 1
-                    ctx.font = "10px sans-serif"
+                    ctx.font = page.axisFontPx + "px sans-serif"
                     for (let pct = 0; pct <= 100; pct += 25) {
                         const y = yOf(pct)
                         ctx.beginPath()
@@ -295,32 +341,6 @@ Item {
                     }
                 }
             }
-
-            // Legend
-            Row {
-                anchors { top: parent.top; right: parent.right; margins: 14 }
-                spacing: 14
-                Repeater {
-                    model: [
-                        { c: battery.charging ? Theme.good : Theme.accent, t: qsTr("Charge level") },
-                        { c: Theme.accent, t: qsTr("Trend") },
-                        { c: Theme.warn, t: qsTr("Expected discharge") },
-                        { c: Theme.bad, t: qsTr("Critical draw") }
-                    ]
-                    Row {
-                        spacing: 5
-                        Rectangle {
-                            width: 10; height: 3; radius: 1.5
-                            color: modelData.c
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Text {
-                            text: modelData.t
-                            color: Theme.textDim
-                            font.pixelSize: 10
-                        }
-                    }
-                }
             }
         }
     }

@@ -90,7 +90,11 @@ set_source_files_properties(ui/Theme.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
-qt_add_qml_module(faraday
+# The UI is a STATIC QML module library rather than being bound to the
+# executable, so the layout regression tests can import the real pages and
+# assert on their actual geometry (see tests/test_layout.cpp).
+qt_add_qml_module(faradayui
+    STATIC
     URI Faraday
     VERSION 1.0
     QML_FILES
@@ -105,6 +109,7 @@ qt_add_qml_module(faraday
         ui/pages/CalibrationPage.qml
         ui/pages/SettingsPage.qml
 )
+target_link_libraries(faradayui PRIVATE Qt6::Quick)
 
 # i18n: English ships as the source language; additional languages only
 # need new .ts files here. The .qm files are embedded under :/i18n/.
@@ -139,6 +144,8 @@ target_link_libraries(faraday_launcher PRIVATE user32)
 
 target_link_libraries(faraday PRIVATE
     faradaylib
+    faradayui
+    faradayuiplugin
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick

@@ -32,3 +32,8 @@ faraday_add_test(test_model_paths SyntheticData.h)
 faraday_add_test(test_tray)
 faraday_add_test(test_field_defects SyntheticData.h)
 faraday_add_test(test_launcher)
+
+# Layout regression tests: link the real QML module so the real pages can be
+# instantiated and their geometry asserted.
+faraday_add_test(test_layout SyntheticData.h)
+target_link_libraries(test_layout PRIVATE faradayui faradayuiplugin Qt6::Quick Qt6::Qml)

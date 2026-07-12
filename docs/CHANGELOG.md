@@ -3,6 +3,26 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.5] — measured AV results (2026-07-12, post-release)
+
+VirusTotal scans of all four 1.0.5 artifacts. **No binaries were changed in
+response** — see docs/VIRUSTOTAL_BASELINE.md and docs/SECURITY_AUDIT.md §5.
+
+- **Application (`faraday-core.exe`): 0 detections.** **Portable ZIP: 0
+  detections** (every bundled runtime file 0/N).
+- **Launcher (`Faraday.exe`): 1/70 — Arctic Wolf, `Unsafe`** (generic
+  label, no family named). This is the one engine the previous single-exe
+  never attracted; Arctic Wolf itself clears the application.
+- **Installer: 2/69 — Elastic `Malicious (high Confidence)` (new) and
+  Trapmine `Suspicious.low.ml.score`** (Trapmine's score *softened* from
+  `Malicious.moderate` in 1.0.1/1.0.2).
+- **Behavioural traces corroborate every security claim**: "Network comms:
+  NOT FOUND" for launcher, core and installer; no dropped files, no
+  persistence, no services, registry **reads** only for the launcher and the
+  app. Honest caveat: the sandbox ran the launcher with no `app\` folder, so
+  it exercised the friendly-error path, not the spawn path.
+- FP submissions written for all three vendors (docs/FP_SUBMISSIONS/).
+
 ## [1.0.5] — 2026-07-12
 
 Packaging presentation and branding. **No behavior changes.**

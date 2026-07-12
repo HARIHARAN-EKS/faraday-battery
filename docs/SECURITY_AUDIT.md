@@ -58,7 +58,81 @@ method limits are stated with each result.
 | Secrets / machine-specific paths / usernames | 0 in shipped code | clean |
 | PII: battery serial number | flows reader → model → UI and the user-generated local HTML report only | **no transmission path exists** — no sockets, no network DLLs in app imports, 0 connections observed |
 
+## 5. EXTERNAL CORROBORATION — VirusTotal's own sandboxes (1.0.5)
+
+This is worth more than our own assertions: the 1.0.5 round included the
+**behaviour tabs** (CAPA, CAPE Sandbox, Zenbox, VirusTotal Jujubox /
+Observer). Their observations are quoted faithfully below and checked
+against every claim this document makes.
+
+### 5a. The launcher, `Faraday.exe` — what the sandbox actually did
+
+**Honest caveat first, because it changes how much the trace proves:** the
+sandbox detonated `Faraday.exe` **alone on the Desktop, with no `app\`
+folder present**. Its file-open trace shows exactly that —
+`C:\Users\<USER>\Desktop\app\faraday-core.exe` (open attempted) — and its
+"Highlighted Text" is *our own error message*: *"Faraday must be run from
+its complete program folder… extract the ENTIRE archive, then run
+Faraday.exe from inside the extracted Faraday folder."*
+
+So the sandbox exercised the **friendly-error path**, not a real launch.
+It therefore **did not test the CreateProcess path** (no child was ever
+spawned, because there was nothing to spawn). What it *does* prove is that
+the failure path is exactly what we designed: a message and a clean exit,
+no loader dialog, no side effects.
+
+| Our claim | VirusTotal sandbox evidence | Verdict |
+|---|---|---|
+| Zero network connections | **"Network comms: NOT FOUND"**; no DNS, no IPs, no IDS rules | **CONFIRMED** |
+| Zero registry **writes** | "Registry Keys **Opened**" only — font/theme reads (`GRE_Initialize`, `FontLink`, `LanguagePack`, `Themes\Personalize`), all from GDI/USER32 during MessageBox rendering. **No registry writes listed at all** | **CONFIRMED** |
+| No dropped files / temp drop | Dropped Files: none listed for the launcher | **CONFIRMED** |
+| No persistence | No Run keys, no services, no scheduled tasks, no startup entries | **CONFIRMED** |
+| No injection | No injected processes observed | **CONFIRMED** (see caveat on static tags below) |
+| No elevation | No elevation observed | **CONFIRMED** |
+| Exactly one child process (`faraday-core.exe`) | **NOT EXERCISED** — the sandbox ran without `app\`, so the launcher correctly refused to spawn anything. Processes Created lists only `Faraday.exe` itself | **UNTESTED by the sandbox** (our own ProcMon-equivalent audit in §3 covers it) |
+
+**Static-analysis tags that are *not* observed behaviour** (and must not be
+misread as such): the MITRE panel lists *Process Injection (T1055)*,
+*Obfuscated Files (T1027)*, *Command and Scripting Interpreter (T1059)*,
+*Shared Modules (T1129)*, and the behaviour tags `idle` and `obfuscated`.
+These come from CAPA-style **capability heuristics on the binary**, at
+INFO/LOW severity, with **zero corresponding runtime events** in the trace.
+"Obfuscated" here reflects the high-entropy PNG icon resources; "process
+injection" reflects imported process APIs (`CreateProcessW`), not an
+observed injection. One crowdsourced Sigma rule matched at MEDIUM —
+*"Sysmon File Executable Creation Detected"* — on a run where the sandbox's
+own extraction wrote the executable to disk.
+
+### 5b. The application, `faraday-core.exe`
+
+Sandbox trace: **Network comms NOT FOUND. Dropped files: NOT FOUND. Sigma
+rules: NOT FOUND. Registry keys opened** — three reads only
+(`Session Manager`, `Segment Heap`, `Safer\CodeIdentifiers` — all standard
+loader reads). **Processes Created: itself only.** MITRE lists *Windows
+Management Instrumentation (T1047)* — which is precisely, and only, what we
+document: read-only WMI battery queries.
+
+**Every claim in §3 and §4 of this document is corroborated by an
+independent sandbox: no network, no registry writes, no drops, no
+persistence.**
+
+### 5c. The installer
+
+The trace shows exactly what an installer does and nothing more: files
+written under `%LOCALAPPDATA%\Programs\Faraday\` (`Faraday.exe`,
+`README.txt`, `app\Qt6*.dll`, …), HKCU `Uninstall\Faraday` values
+(DisplayName/DisplayIcon/EstimatedSize/…), NSIS temp files created **and
+deleted**, and **"Network comms: NOT FOUND"**. The `svchost`/`lsass`/
+`Explorer` entries in its process tree are **the sandbox VM's own system
+processes**, not children of our installer (its own tree node is the single
+`Faraday-1.0.5-setup-win64.exe` process). The "Memory Pattern URLs"
+(`nsis.sf.net`, `bugreports.qt.io`, `crl.entrust.net`, …) are **static
+strings inside the stock NSIS stub and the Qt libraries** — no connection
+to any of them was attempted or observed.
+
 ## Verdict
 
 Every locally verifiable hardening claim re-confirmed on the shipped
-1.0.2 binaries. No defects found in this phase.
+binaries — and now **independently corroborated by VirusTotal's sandboxes**
+for both the launcher and the application. Nothing the sandboxes observed
+contradicts any claim in this document, and nothing unexpected appeared.

@@ -74,6 +74,39 @@ spawning is the single behavior a heuristic could notice, and it is the
 same class of action the app already performs when it runs the stock
 `powercfg.exe`. Nothing was packed, obfuscated, or hidden to achieve it.
 
+## Measured VirusTotal results — 1.0.5 (all four artifacts)
+
+| Artifact | Result | Flagging engine(s) |
+|---|---|---|
+| `faraday-core.exe` (the application) | **0 detections** | — (Arctic Wolf, Elastic and Trapmine all report it clean) |
+| `Faraday-1.0.5-portable-win64.zip` | **0 detections** | — (every bundled runtime file 0/N) |
+| **`Faraday.exe` (launcher, new)** | **1 / 70** | **Arctic Wolf — `Unsafe`** (a generic verdict label; no malware family named) |
+| `Faraday-1.0.5-setup-win64.exe` | **2 / 69** | **Elastic — `Malicious (high Confidence)` (new)**; **Trapmine — `Suspicious.low.ml.score`** (softened from `Malicious.moderate`) |
+
+Full detail, hashes and permalinks: [VIRUSTOTAL_BASELINE.md](VIRUSTOTAL_BASELINE.md).
+FP submissions for all three vendors: [FP_SUBMISSIONS/](FP_SUBMISSIONS/).
+
+**The launcher's behavioural profile — corroborated externally.**
+VirusTotal's sandboxes traced `Faraday.exe` and recorded: **"Network comms:
+NOT FOUND"**, no dropped files, no persistence, no services, no scheduled
+tasks, and registry keys **read** only (font/theme lookups made by
+GDI/USER32 while drawing a MessageBox). Its entire design — read a manifest,
+`CreateProcess` one fixed-name sibling in its own folder — is a strict
+subset of what the application it starts already does. See
+[SECURITY_AUDIT.md §5](SECURITY_AUDIT.md) for the claim-by-claim
+confirm/refute, including the honest caveat that the sandbox ran the
+launcher *without* its `app\` folder and therefore exercised the
+friendly-error path rather than the spawn path.
+
+The three hits are all **generic/ML verdicts, not named families**, and all
+three vendors clear the actual application. This is the known, documented
+cost of shipping unsigned binaries — and the small-static-stub-that-spawns-
+a-child silhouette is exactly the shape ML models score conservatively.
+**No mitigation is being applied reflexively**: two earlier rounds proved
+that installer hygiene does not move generic ML scores at all, and the
+launcher's UX benefit (no raw Windows loader dialog, field-proven) is a
+deliberate trade-off recorded here rather than silently reversed.
+
 ### 1.0.5 (branding + `app\` layout): heuristic-surface delta
 
 Re-verified from scratch on the 1.0.5 build. Two things changed, one of

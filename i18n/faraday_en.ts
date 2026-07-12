@@ -551,47 +551,47 @@ Live monitoring is disabled.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="59"/>
+        <location filename="../ui/Main.qml" line="71"/>
         <source>Faraday</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="69"/>
+        <location filename="../ui/Main.qml" line="81"/>
         <source>Dashboard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="70"/>
+        <location filename="../ui/Main.qml" line="82"/>
         <source>Live monitor</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="71"/>
+        <location filename="../ui/Main.qml" line="83"/>
         <source>History</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="72"/>
+        <location filename="../ui/Main.qml" line="84"/>
         <source>Alerts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="73"/>
+        <location filename="../ui/Main.qml" line="85"/>
         <source>Calibration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="74"/>
+        <location filename="../ui/Main.qml" line="86"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="127"/>
+        <location filename="../ui/Main.qml" line="139"/>
         <source>Dark theme</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/Main.qml" line="127"/>
+        <location filename="../ui/Main.qml" line="139"/>
         <source>Light theme</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1178,32 +1178,32 @@ Live monitoring is disabled.</source>
 <context>
     <name>faraday::TrayManager</name>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="60"/>
+        <location filename="../src/app/TrayManager.cpp" line="65"/>
         <source>Open Faraday</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="62"/>
+        <location filename="../src/app/TrayManager.cpp" line="67"/>
         <source>Sample now</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="65"/>
+        <location filename="../src/app/TrayManager.cpp" line="70"/>
         <source>Quit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="69"/>
+        <location filename="../src/app/TrayManager.cpp" line="74"/>
         <source>Faraday — Battery Intelligence Suite</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="91"/>
+        <location filename="../src/app/TrayManager.cpp" line="96"/>
         <source>Faraday keeps running</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/TrayManager.cpp" line="92"/>
+        <location filename="../src/app/TrayManager.cpp" line="97"/>
         <source>Monitoring continues in the tray. Right-click the icon to quit.</source>
         <translation type="unfinished"></translation>
     </message>

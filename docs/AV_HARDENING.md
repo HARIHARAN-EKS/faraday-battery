@@ -74,6 +74,29 @@ spawning is the single behavior a heuristic could notice, and it is the
 same class of action the app already performs when it runs the stock
 `powercfg.exe`. Nothing was packed, obfuscated, or hidden to achieve it.
 
+### 1.0.5 (branding + `app\` layout): heuristic-surface delta
+
+Re-verified from scratch on the 1.0.5 build. Two things changed, one of
+them visible in the numbers:
+
+- **Embedded icons raised `.rsrc` entropy to ~7.9** on all three PE files
+  (launcher, core, installer). This is **PNG-compressed icon data**, which
+  is high-entropy by nature — every icon-bearing Windows binary looks like
+  this. **Code sections are unchanged and unremarkable** (`.text` entropy
+  5.87 / 5.96 / 6.45), and there is still **no packer**: nothing is
+  compressed or encrypted at the section level, and no unpacking stub
+  exists. Reported here plainly rather than left for a reader to discover.
+- **The `app\` subfolder** changes only where files sit. The launcher still
+  performs exactly one `CreateProcess` of a fixed-name binary inside its own
+  directory tree — now `app\faraday-core.exe` — with no shell execution, no
+  temp drop, no download, no injection, no elevation, no registry.
+
+Everything else is identical: launcher imports remain system-only
+(KERNEL32/USER32/msvcrt), the core's imports are unchanged, **zero network
+imports anywhere**, **zero W+X sections** on all three PEs, full VersionInfo
+and `asInvoker` on all three, and Windows Defender reports **no threats** on
+the launcher, the core, the installer and the ZIP.
+
 ## Residual heuristics an unsigned app can still trip
 
 - **WMI usage** — Faraday queries battery classes; some heuristics score any

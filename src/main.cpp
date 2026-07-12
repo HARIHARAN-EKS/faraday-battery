@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Faraday"));
     app.setOrganizationName(QStringLiteral("Faraday Project"));
-    app.setApplicationVersion(QStringLiteral("1.0.2"));
+    app.setApplicationVersion(QStringLiteral("1.0.3"));
     app.setQuitOnLastWindowClosed(false); // tray keeps us alive
 
     faraday::BatteryModel model;

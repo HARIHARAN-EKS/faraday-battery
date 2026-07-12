@@ -23,7 +23,7 @@
 
 !define PRODUCT_NAME "Faraday"
 !define PRODUCT_FULL_NAME "Faraday - Battery Intelligence Suite"
-!define PRODUCT_VERSION "1.0.2"
+!define PRODUCT_VERSION "1.0.3"
 !define PRODUCT_PUBLISHER "Faraday Project"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Faraday"
 

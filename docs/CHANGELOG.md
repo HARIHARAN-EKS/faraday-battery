@@ -3,12 +3,42 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
-## [Unreleased] — deep-verification round (2026-07-12)
+## [1.0.3] — 2026-07-12
 
-Full test/performance/reliability/security audit of the shipped 1.0.2.
-The shipped binaries were NOT modified (their VirusTotal-scanned hashes
-remain authoritative); all changes live in source/tests for the next
-release.
+Field-defect release: the first deployment on a second machine (MSI
+laptop, genuinely worn battery) surfaced real defects, all fixed here.
+Ships together with the deep-verification round's hostile-input fixes
+below. Field record: docs/FIELD_TESTING.md.
+
+### Fixed (field defects, each with a proving test)
+- **F1 (high): cycle-count sentinel treated as a measured zero.** Firmware
+  that does not track cycles reports 0 through `BatteryCycleCount`/
+  powercfg; 1.0.2 rendered "0 cycles" and reasoned *"still early in its
+  life"* against a battery it simultaneously measured at 33 % wear. Zero
+  is now a sentinel end to end (reader, model, history chart, HTML
+  report → "Not reported by this hardware"), the verdict engine makes no
+  cycle-derived claim without a measured non-zero count, and low-measured-
+  cycles wording switches to calendar-aging phrasing on packs below 80 %
+  health — the self-contradiction class is structurally impossible now.
+  The audit sweep (docs/METRICS.md sentinel table) also caught voltage-0
+  firmware stubs rendering as "0.00 V"; same fix.
+- **F2 (medium):** the dashboard header's unlabeled bar (charge) sat next
+  to the health ring with no distinction. Ring now captioned "BATTERY
+  HEALTH", bar captioned "CURRENT CHARGE" with its own value, and the bar
+  no longer borrows the health-grade color.
+- **F3 (low):** raw ACPI object identifiers ("BIF0_9") were presented as
+  the device name. Internal identifiers are demoted from the identity
+  panel (honest "Not reported by this hardware"); raw values stay in the
+  Advanced drawer, where the Unique ID row now lives permanently.
+- **F4 (info):** recorded — neither field machine exposes a battery
+  thermal zone; the temperature alert is effectively unavailable on most
+  consumer hardware, and its greyed/disabled presentation is the correct
+  behavior (confirmed in the field).
+
+## [Deep-verification round] — 2026-07-12 (ships in 1.0.3)
+
+Full test/performance/reliability/security audit of the shipped 1.0.2;
+these changes were held in source and ship now with 1.0.3.
 
 ### Fixed (each with a proving test)
 - `metrics::linearRegression` returned `valid=true` with a NaN slope when

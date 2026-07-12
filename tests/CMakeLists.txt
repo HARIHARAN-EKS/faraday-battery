@@ -27,3 +27,4 @@ faraday_add_test(test_fuzz_powercfg PropertyGen.h PowercfgFixture.h PowercfgFixt
 faraday_add_test(test_fuzz_reader PropertyGen.h)
 faraday_add_test(test_fuzz_settings_db PropertyGen.h)
 faraday_add_test(test_bench_perf)
+faraday_add_test(test_clock_jumps SyntheticData.h)

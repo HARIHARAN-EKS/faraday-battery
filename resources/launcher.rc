@@ -1,4 +1,4 @@
-// Faraday version-info resource, application icon and asInvoker manifest.
+// Faraday launcher version-info resource, icon and asInvoker manifest.
 #include <winver.h>
 
 #define VER_FILEVERSION             1,0,3,0
@@ -26,9 +26,9 @@ BEGIN
             VALUE "CompanyName",      "Faraday Project\0"
             VALUE "FileDescription",  "Faraday - Battery Intelligence Suite\0"
             VALUE "FileVersion",      VER_FILEVERSION_STR
-            VALUE "InternalName",     "faraday\0"
+            VALUE "InternalName",     "faraday-launcher\0"
             VALUE "LegalCopyright",   "Copyright (C) 2026 Faraday Project. MIT License.\0"
-            VALUE "OriginalFilename", "faraday-app.exe\0"
+            VALUE "OriginalFilename", "faraday.exe\0"
             VALUE "ProductName",      "Faraday Battery Intelligence Suite\0"
             VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
         END

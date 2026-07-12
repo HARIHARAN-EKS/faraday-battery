@@ -44,6 +44,30 @@ charging-habit insights; portable mode itself (ran from an extracted ZIP).
 | No-thermal-zone honesty | **field-proven (both)** |
 | Portable ZIP deployment | **field-proven (MSI)** |
 
+## Machine 3 — unknown test machine (bare-exe launch, 1.0.3 portable)
+
+A user launched `faraday.exe` **outside its runtime folder** (bare exe or
+half-extracted ZIP) and hit the raw Windows loader dialog: *"The code
+execution cannot proceed because Qt6Gui.dll was not found."* Root cause
+established by reproduction (D1): the packaging was complete — 132
+runtime files verified in the ZIP, installer payload set-identical — but
+nothing protected against running the exe away from its runtime, and
+nothing *could* from inside that process (static PE imports fail in the
+loader before `main()`; MinGW has no `/DELAYLOAD`).
+
+**Fix (1.0.4):** `faraday.exe` is now a 63 KB launcher stub linking only
+against KERNEL32/USER32/msvcrt with a statically linked MinGW runtime —
+it starts in ANY environment. It verifies every file in the
+packaging-generated `runtime.manifest`, then starts the real application
+(`faraday-app.exe`) with loader error boxes suppressed and watches its
+first seconds, so even a corrupted DLL ends in a friendly
+"extract the ENTIRE archive" message. The ZIP gained a root README.txt;
+the installer now verifies its payload landed completely and aborts
+loudly if not. Negative suite: bare exe, all 129 manifest entries deleted
+one-by-one, missing platforms/QML dirs, truncated DLL, foreign working
+directory, spaced paths, Explorer-extraction, non-system drive — no path
+reaches a loader dialog.
+
 ## Still untested for lack of hardware access
 
 - **Lenovo firmware charge-cap** (`Lenovo_BiosSetting` probe + UI section)

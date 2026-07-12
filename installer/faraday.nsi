@@ -67,13 +67,35 @@ VIAddVersionKey "InternalName" "faraday-setup"
 
 !insertmacro MUI_LANGUAGE "English"
 
+; Post-copy payload verification (D2): the install must never complete
+; with a partial runtime — that is exactly the state that produced the
+; field loader failure.
+!macro VerifyInstalled FILE
+  IfFileExists "$INSTDIR\${FILE}" +3 0
+    MessageBox MB_OK|MB_ICONSTOP "Installation is incomplete: ${FILE} is missing.$\r$\nPlease re-run the installer."
+    Abort
+!macroend
+
 ; ---- Install ----------------------------------------------------------
 Section "Faraday (required)"
   SectionIn RO
   SetOutPath "$INSTDIR"
   File /r "..\dist\Faraday\*.*"
 
-  ; Start-menu shortcuts
+  ; Verify the critical payload actually landed.
+  !insertmacro VerifyInstalled "faraday.exe"
+  !insertmacro VerifyInstalled "faraday-app.exe"
+  !insertmacro VerifyInstalled "runtime.manifest"
+  !insertmacro VerifyInstalled "Qt6Core.dll"
+  !insertmacro VerifyInstalled "Qt6Gui.dll"
+  !insertmacro VerifyInstalled "Qt6Qml.dll"
+  !insertmacro VerifyInstalled "Qt6Quick.dll"
+  !insertmacro VerifyInstalled "platforms\qwindows.dll"
+  !insertmacro VerifyInstalled "sqldrivers\qsqlite.dll"
+
+  ; Start-menu shortcuts. SetOutPath above also fixes each shortcut's
+  ; "Start in" directory to $INSTDIR, so the launcher always runs with the
+  ; correct working directory beside its runtime.
   CreateDirectory "$SMPROGRAMS\Faraday"
   CreateShortCut "$SMPROGRAMS\Faraday\Faraday.lnk" "$INSTDIR\faraday.exe"
   CreateShortCut "$SMPROGRAMS\Faraday\Uninstall Faraday.lnk" "$INSTDIR\uninstall.exe"

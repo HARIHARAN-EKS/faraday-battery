@@ -49,15 +49,26 @@ ctest --test-dir build --output-on-failure
 ## Release packaging
 
 ```powershell
-# 1. Deploy Qt runtime next to the exe. --skip-plugin-types drops the
+# 1. Deploy the launcher stub (faraday.exe) + the Qt application
+#    (faraday-app.exe) + the Qt runtime. --skip-plugin-types drops the
 #    network-touching and debug plugins (see AV_HARDENING.md).
 mkdir dist\Faraday
-copy build\faraday.exe dist\Faraday\
+copy build\faraday.exe dist\Faraday\        # 63 KB static launcher
+copy build\faraday-app.exe dist\Faraday\    # the Qt application
 C:\Qt\6.8.2\mingw_64\bin\windeployqt.exe --release --compiler-runtime `
     --no-translations --skip-plugin-types qmltooling,networkinformation,tls,generic `
-    --qmldir ui dist\Faraday\faraday.exe
+    --qmldir ui dist\Faraday\faraday-app.exe
 Remove-Item dist\Faraday\sqldrivers\qsqlmimer.dll, `
     dist\Faraday\sqldrivers\qsqlodbc.dll, dist\Faraday\sqldrivers\qsqlpsql.dll
+
+# 1b. Generate the launcher's runtime.manifest (every runtime file; the
+#     launcher refuses to start the app if any listed file is missing)
+#     and the portable README.
+$dist = (Resolve-Path dist\Faraday).Path
+Get-ChildItem dist\Faraday -Recurse -File |
+    Where-Object { $_.Name -notin @('faraday.exe','runtime.manifest','portable.txt','README.txt') } |
+    ForEach-Object { $_.FullName.Substring($dist.Length + 1) } | Sort-Object |
+    Set-Content dist\Faraday\runtime.manifest -Encoding ASCII
 
 # 2. Installer (per-user, no elevation) — build BEFORE staging the
 #    portable marker: the installer payload must stay marker-free.

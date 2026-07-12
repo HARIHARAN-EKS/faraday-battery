@@ -3,6 +3,34 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.4] — 2026-07-12
+
+Field-failure release: a bare `faraday.exe` run outside its runtime folder
+produced the raw Windows loader dialog ("Qt6Gui.dll was not found") — a
+failure no code inside that process could catch (static PE imports resolve
+before `main()`). Packaging itself was verified complete (D1).
+
+### Added
+- **Launcher stub.** `faraday.exe` is now a 63 KB statically linked
+  Win32 stub (imports: KERNEL32, USER32, msvcrt only — starts anywhere).
+  It validates the runtime against the packaging-generated
+  `runtime.manifest`, then starts the real application
+  (`faraday-app.exe`) with loader error boxes suppressed and watches its
+  first seconds. Every failure mode ends in a clear "extract the ENTIRE
+  archive / reinstall" message — never a raw loader dialog. No packing,
+  no network, no registry, asInvoker, full VersionInfo on both binaries.
+- **runtime.manifest** generated at packaging time (every runtime file,
+  129 entries) and shipped in both the ZIP and the installer.
+- **ZIP root README.txt** with explicit extract-the-whole-folder
+  instructions; archive still extracts to a single top-level `Faraday\`.
+- **Installer payload verification**: aborts loudly if any critical file
+  failed to land; shortcuts explicitly start in the install directory.
+- 26th suite `test_launcher` (139 cases): bare exe, each of the 129
+  manifest entries deleted in turn, missing platforms/QML directories,
+  truncated DLL, foreign working directory (≡ wrong-"Start in" shortcut),
+  spaced paths — plus scripted Explorer-extraction and non-system-drive
+  verifications.
+
 ## [1.0.3] — 2026-07-12
 
 Field-defect release: the first deployment on a second machine (MSI

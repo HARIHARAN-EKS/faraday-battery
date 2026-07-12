@@ -115,7 +115,26 @@ qt_add_translations(faraday
 
 set_target_properties(faraday PROPERTIES
     WIN32_EXECUTABLE TRUE
+    # The Qt application ships as faraday-app.exe; the faraday.exe users
+    # launch is the static stub below, which verifies the runtime first
+    # (a bare Qt exe dies in the Windows loader before main() — field
+    # defect D1/D2).
+    OUTPUT_NAME "faraday-app"
 )
+
+# ---------------------------------------------------------------------------
+# Launcher stub: system DLLs only, statically linked MinGW runtime — starts
+# in ANY environment, verifies the runtime, then runs faraday-app.exe.
+# ---------------------------------------------------------------------------
+add_executable(faraday_launcher WIN32
+    src/launcher/launcher_main.cpp
+    resources/launcher.rc
+)
+set_target_properties(faraday_launcher PROPERTIES OUTPUT_NAME "faraday")
+if(NOT MSVC)
+    target_link_options(faraday_launcher PRIVATE -static)
+endif()
+target_link_libraries(faraday_launcher PRIVATE user32)
 
 target_link_libraries(faraday PRIVATE
     faradaylib

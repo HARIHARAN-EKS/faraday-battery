@@ -1,78 +1,86 @@
-# VirusTotal baseline — release 1.0.1
+# VirusTotal baseline — releases 1.0.1 and 1.0.2
 
-Measured facts from the first real VirusTotal submission of the 1.0.1
-artifacts. Source: the report PDFs archived in `VirusTotal\` at the
-repository root (summary, detection, details and relations tabs for both
-files). Future scans should be compared against this baseline.
+Measured facts from real VirusTotal submissions. Sources: the report PDFs
+archived at the repository root — `VirusTotal\` (1.0.1 round) and
+`VirusTotal\2\` (1.0.2 round). Note for the 1.0.2 round: the saved summary
+pages for the exe and the ZIP (`2\1_1.pdf`, `2\3_1.pdf`) are empty files;
+their data is fully recoverable from the detection/details tabs, whose
+titles and URLs carry the same SHA-256s. Every 1.0.2 report was verified
+to match the expected artifact hash before use.
 
-## Artifact 1 — faraday.exe (application, 1.0.1)
+## The headline: 1.0.1 → 1.0.2 comparison
+
+| Artifact | 1.0.1 | 1.0.2 | Movement |
+|---|---|---|---|
+| **faraday.exe** (payload) | **0 / 70** | **0 / 70 — stayed clean; Trapmine explicitly Undetected** | none — the A2/A3 code changes (portable mode, MUI2 round) did not attract a single engine |
+| **NSIS installer** | 1 / 69 — Trapmine `Malicious.moderate.ml.score` | **1 / 68 — Trapmine `Malicious.moderate.ml.score`** | unchanged: same single vendor, same generic ML bucket, no new engines. The full A2 hygiene pass (MUI2, complete VersionInfo, manifests, zero-Exec) did not move Trapmine's ML score — confirming the residual is keyed on the unsigned stub itself, exactly as the structural-limit statement predicted |
+| **Portable ZIP** (recommended channel) | not scanned | **0 detections** (67 engines Undetected; ClamAV & Sangfor timeout; 7 mobile/appliance engines unable to process; Trapmine itself *unable to process file type*) | first scan — clean. Load-bearing result for the recommended channel |
+
+Classification of the sole remaining detection: `Malicious.moderate.ml.score`
+is a machine-learning score bucket, not a named malware family, and is
+corroborated by none of the other engines. **Generic ML false positive on
+the unsigned NSIS wrapper.** Everything Faraday actually ships executes
+with 0 detections.
+
+## Artifact details — 1.0.2 round (scanned 2026-07-12)
+
+### faraday.exe 1.0.2 — 0/70, scanned 02:55:23 UTC
 
 | Property | Value |
 |---|---|
-| **Verdict** | **0 / 70 — no security vendor flagged this file** |
-| Scan date | 2026-07-12 02:14:25 UTC (first + last submission) |
-| SHA-256 | `b0a4825ca9c8c4b0c3130c7950e969e36a4b5e17a27a813300f5c361584becff` |
-| SHA-1 | `82565c30be21210d788810b0636f807fc970d9b5` |
-| MD5 | `aecb30de3e8ca6f8e2968b12755701bb` |
-| VT link | <https://www.virustotal.com/gui/file/b0a4825ca9c8c4b0c3130c7950e969e36a4b5e17a27a813300f5c361584becff> |
-| File type | Win32 EXE (PE32+ GUI x86-64), 3.35 MB (3,511,077 bytes) |
-| DetectItEasy | PE64 · Library: Qt (6.X) · Linker: GNU linker ld (GNU Binutils) 2.39 [GUI64] |
-| TrID | Microsoft Visual C++ compiled executable (generic) 45.6% · Win64 Executable (generic) |
-| Signature | not signed (no certificate available) |
-| Version info | Copyright (C) 2026 Faraday Project. MIT License. · Faraday Battery Intelligence Suite · 1.0.1.0 — fully populated |
-| Resources | RT_ICON ×7, RT_GROUP_ICON ×1, RT_MANIFEST ×1, RT_VERSION ×1 (all ENGLISH US) |
-| Imports | Qt6Core, Qt6Gui, Qt6Qml, Qt6Sql, Qt6Widgets, libgcc_s_seh-1, KERNEL32, msvcrt, ole32, OLEAUT32 — **no network DLLs** |
-| Relations | PE resource child (XML manifest) 0/60; bundled sections 0/61 |
+| SHA-256 | `3e6437991eb28502a337ee30b980eea3a923b74b47e5dbd402e1ba602e621d16` |
+| SHA-1 / MD5 | `854a882f920fb21c98b784189aa0b273d97b2197` / `62c57889762c3ef0a24d6efcf9fad634` |
+| VT link | <https://www.virustotal.com/gui/file/3e6437991eb28502a337ee30b980eea3a923b74b47e5dbd402e1ba602e621d16> |
+| File type | PE32+ GUI x86-64, 3.35 MB (3,513,482 bytes); DetectItEasy: PE64 · Qt 6.X · GNU ld 2.39 |
+| Sections | 22 (same layout as 1.0.1: .text/.data/.rdata/… + DWARF debug sections) |
+| VersionInfo | detected, fully populated, FileVersion 1.0.2.0 |
+| Imports | Qt6Core/Gui/Qml/Sql/Widgets, libgcc, KERNEL32, msvcrt, ole32, OLEAUT32 — no network DLLs |
+| Signature | not signed |
+| Relations | PE resource child (manifest XML) 0/60 |
 
-## Artifact 2 — Faraday-1.0.1-setup-win64.exe (NSIS installer)
+### Faraday-1.0.2-setup-win64.exe — 1/68 (Trapmine), scanned 02:55:52 UTC
 
 | Property | Value |
 |---|---|
-| **Verdict** | **1 / 69** |
-| **Flagging vendor** | **Trapmine** |
-| **Detection name** | **`Malicious.moderate.ml.score`** |
-| Scan date | 2026-07-12 02:14:54 UTC (first + last submission) |
-| SHA-256 | `aea522aa4a0bdf650de3894ccf8050419fa46cbad5f1861b26283a2aabb5aa99` |
-| SHA-1 | `330ec3577f687e999316b1039f583ddb57828796` |
-| MD5 | `8260d824503b64cdfb17c0bff61d1c14` |
-| VT link | <https://www.virustotal.com/gui/file/aea522aa4a0bdf650de3894ccf8050419fa46cbad5f1861b26283a2aabb5aa99> |
-| File type | Win32 EXE (PE32 GUI Intel 80386), Nullsoft Installer self-extracting archive, 22.07 MB (23,146,977 bytes) |
-| DetectItEasy | PE32 · Installer: Nullsoft Scriptable Install System **(3.12) [lzma, solid]** |
+| SHA-256 | `9137dba13fcaba4a91e2b343a00c67d275f34a3196c0079065e76f162a351457` |
+| SHA-1 / MD5 | `7ca2c9d8b8971b449e942e378d50d75691d412bd` / `6396f7b60792c7fea599db80d2580365` |
+| VT link | <https://www.virustotal.com/gui/file/9137dba13fcaba4a91e2b343a00c67d275f34a3196c0079065e76f162a351457> |
+| Flagged by | **Trapmine: `Malicious.moderate.ml.score`** (generic ML bucket); all other engines Undetected; ClamAV timeout; 5 mobile engines unable to process |
+| File type | PE32 NSIS self-extracting, 22.09 MB (23,159,266 bytes); DetectItEasy: NSIS **3.12** [lzma, solid]; stock 5-section stub (`.text .rdata .data .ndata .rsrc`) |
+| VersionInfo | detected — now includes `OriginalFilename` (`Faraday-1.0.2-setup-win64.exe`) and `InternalName` (`faraday-setup`) added in the A2 hygiene pass; RT_DIALOG ×5 (MUI2) |
+| Overlay | LZMA solid archive, entropy 7.99999 (inherent to compression) |
 | Signature | not signed (no certificate available) |
-| Version info | present (Copyright / Product / Description "Faraday - Battery Intelligence Suite Setup" / FileVersion 1.0.1.0) — `OriginalFilename` and `InternalName` were missing in 1.0.1 |
-| Sections | 5 — `.text .rdata .data .ndata .rsrc` (standard NSIS 3.12 stub layout; creation timestamp 2026-04-19 20:38:47 UTC is the stock stub's) |
-| Resources | RT_ICON ×7, RT_GROUP_ICON ×1, RT_DIALOG ×5 (classic NSIS UI in 1.0.1), RT_MANIFEST ×1, RT_VERSION ×1 |
-| Overlay | the LZMA solid archive: entropy 7.99999 (inherent to any compressed payload; not a packer on the stub) |
-| **Dropped files** | **102 scanned individually — 0 detections on every one** |
-| Bundled files | 100 listed — 0 detections on every one (Qt DLLs, QML plugins, etc.) |
-| Other engines | ClamAV: timeout · Avast-Mobile / BitDefenderFalx / Symantec Mobile Insight / Trustlook: unable to process file type (mobile engines) |
 
-### Sandbox "contacted domains/IPs" note
+### Faraday-1.0.2-portable-win64.zip — 0 detections, scanned 02:56:06 UTC
 
-The relations tab lists `nexusrules.officeapps.live.com` and seven
-Microsoft-owned IPs (all AS 8075). That is background traffic of the
-Windows/Office image inside VirusTotal's detonation sandbox, not traffic
-from Faraday: the application binary imports no network DLLs (see artifact
-1) and the installer's only imports are ADVAPI32 / SHELL32 / ole32 /
-COMCTL32 / USER32 / GDI32 / KERNEL32.
+| Property | Value |
+|---|---|
+| SHA-256 | `83afe5704aaff4d348ef3d917e27f878f6f72c961ccfb9fbc7fd0eae7c69393e` |
+| SHA-1 / MD5 | `ad67bf8f1ef8709508aab9a5b01b53815465b550` / `d7bd9e69ecfe3c8b410125e65bcf4539` |
+| VT link | <https://www.virustotal.com/gui/file/83afe5704aaff4d348ef3d917e27f878f6f72c961ccfb9fbc7fd0eae7c69393e> |
+| Verdict detail | 67 engines Undetected; ClamAV + Sangfor timeout; Arctic Wolf, BitDefenderFalx, Palo Alto, SecureAge, Symantec Mobile Insight, TEHTRIS, **Trapmine**: unable to process file type |
+| File type | ZIP (store method at archive level), 30.41 MB; 167 contained files (43 PE, 64 QML, 11 qmltypes, 1 TXT = `portable.txt`, 37 dirs), 79.31 MB uncompressed |
+| Bundled-file scans | every listed file 0/N — `Faraday/faraday.exe` **0/70**, stock Qt/MinGW runtime DLLs (Qt6Core 0/67, Qt6Gui 0/67, Qt6Network 0/65, Qt6OpenGL 0/72, libgcc 0/70, libstdc++ 0/66, libwinpthread 0/70, D3Dcompiler_47 0/69, opengl32sw 0/70, …) |
 
-## Classification of the single detection
+## Baseline — 1.0.1 round (scanned 2026-07-12, first submission)
 
-`Malicious.moderate.ml.score` is, by its own naming, a **machine-learning
-score bucket** ("moderate ML score") — not a named malware family, not a
-signature match, and corroborated by zero of the other 68 engines
-(including Microsoft, Kaspersky, BitDefender, ESET, Sophos, CrowdStrike,
-Elastic and both static-ML engines). Combined with the 0/70 payload
-executable and 0 detections across all 102 dropped files, this is a
-**generic false positive on the unsigned NSIS wrapper** — exactly the
-residual-risk class predicted in AV_HARDENING.md ("1–3 hits from
-low-reputation engines are the normal unsigned-binary noise level").
+| Artifact | Verdict | SHA-256 |
+|---|---|---|
+| faraday.exe 1.0.1 | 0 / 70 | `b0a4825ca9c8c4b0c3130c7950e969e36a4b5e17a27a813300f5c361584becff` |
+| Faraday-1.0.1-setup-win64.exe | 1 / 69 — Trapmine `Malicious.moderate.ml.score` | `aea522aa4a0bdf650de3894ccf8050419fa46cbad5f1861b26283a2aabb5aa99` |
+| (all 102 dropped files) | 0 detections each | — |
+
+Full 1.0.1 details (PE metadata, sandbox-noise note about the AS-8075
+Microsoft IPs on the relations tab, etc.) are preserved in the archived
+PDFs under `VirusTotal\`.
 
 ## Comparison protocol for future scans
 
-1. Upload the new `faraday.exe` and `Faraday-<ver>-setup-win64.exe`.
-2. Expect: payload exe 0/N; installer 0–1/N with only generic/ML labels.
-3. Escalate (treat as a real problem, not noise) only if: a **major**
-   engine fires, more than ~3 engines fire, or any detection names a
-   **specific malware family**.
-4. Record the new hashes and links in this file alongside the baseline.
+1. Upload the new exe, installer and ZIP.
+2. Expect: exe 0/N; ZIP 0/N; installer 0–1/N with only generic/ML labels
+   (Trapmine's ML score is a known, stable false positive on the unsigned
+   stub — an FP report template lives in `FP_SUBMISSIONS/Trapmine.md`).
+3. Escalate — treat as a real problem — only if a **major** engine fires,
+   more than ~3 engines fire, or any detection names a specific malware
+   family. The payload exe must always be 0.
+4. Record new hashes and links here.

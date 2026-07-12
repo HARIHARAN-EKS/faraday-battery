@@ -102,6 +102,69 @@ private slots:
         QVERIFY(BatteryReader::win32StatusToString(12).isEmpty());
     }
 
+    void temperatureResolutionPrefersBatteryZone()
+    {
+        BatterySnapshot snap;
+        ThermalZone cpu;
+        cpu.instanceName = QStringLiteral("ACPI\\ThermalZone\\CPUZ_0");
+        cpu.celsius = 48.0;
+        cpu.valid = true;
+        ThermalZone bat;
+        bat.instanceName = QStringLiteral("ACPI\\ThermalZone\\BATZ_0");
+        bat.celsius = 33.5;
+        bat.valid = true;
+        bat.isBatteryZone = true;
+        snap.thermalZones << cpu << bat;
+
+        BatteryReader::resolveTemperature(snap);
+        QVERIFY(snap.temperatureC.has_value());
+        QCOMPARE(*snap.temperatureC, 33.5);       // battery zone, not the mean
+        QVERIFY(!snap.temperatureIsEstimate);     // a real battery sensor
+    }
+
+    void temperatureResolutionFallsBackToEstimate()
+    {
+        // No *BAT* zone (the reference machine's shape): the mean of the
+        // valid zones is reported, flagged as an estimate; the TZ1-style
+        // stub zone (raw 2732 = 0.05 C -> valid=false) is excluded.
+        BatterySnapshot snap;
+        ThermalZone tz0;
+        tz0.instanceName = QStringLiteral("ACPI\\ThermalZone\\TZ0__0");
+        tz0.celsius = 40.0;
+        tz0.valid = true;
+        ThermalZone tz1Stub;
+        tz1Stub.instanceName = QStringLiteral("ACPI\\ThermalZone\\TZ1__0");
+        tz1Stub.celsius = BatteryReader::thermalRawToCelsius(2732);
+        tz1Stub.valid = BatteryReader::thermalRawIsValid(2732); // false
+        ThermalZone tz2;
+        tz2.instanceName = QStringLiteral("ACPI\\ThermalZone\\TZ2__0");
+        tz2.celsius = 50.0;
+        tz2.valid = true;
+        snap.thermalZones << tz0 << tz1Stub << tz2;
+
+        BatteryReader::resolveTemperature(snap);
+        QVERIFY(snap.temperatureC.has_value());
+        QCOMPARE(*snap.temperatureC, 45.0);       // mean of 40 and 50 only
+        QVERIFY(snap.temperatureIsEstimate);      // honestly flagged
+    }
+
+    void temperatureResolutionRejectsStubsAndEmpty()
+    {
+        BatterySnapshot onlyStubs;
+        ThermalZone stub;
+        stub.instanceName = QStringLiteral("ACPI\\ThermalZone\\TZ1__0");
+        stub.valid = false;
+        onlyStubs.thermalZones << stub;
+        BatteryReader::resolveTemperature(onlyStubs);
+        QVERIFY(!onlyStubs.temperatureC.has_value());
+        QVERIFY(!onlyStubs.unavailable.filter(QStringLiteral("stub")).isEmpty());
+
+        BatterySnapshot none;
+        BatteryReader::resolveTemperature(none);
+        QVERIFY(!none.temperatureC.has_value());
+        QVERIFY(!none.unavailable.filter(QStringLiteral("no instances")).isEmpty());
+    }
+
     void noBatteryDetection()
     {
         BatterySnapshot empty;

@@ -199,8 +199,10 @@ Item {
                     sub: qsTr("charge cycles used")
                 }
                 MetricCard {
+                    id: temperatureCard
                     Layout.fillWidth: true
-                    title: qsTr("TEMPERATURE")
+                    title: battery.temperatureKnown && battery.temperatureIsEstimate
+                           ? qsTr("TEMPERATURE (EST.)") : qsTr("TEMPERATURE")
                     icon: "\u{1F321}"
                     accent: battery.temperatureKnown && battery.temperatureC > 45 ? Theme.bad : Theme.accent
                     value: {
@@ -208,7 +210,20 @@ Item {
                         return battery.temperatureKnown
                                ? battery.formatTemperature(battery.temperatureC) : "—"
                     }
-                    sub: qsTr("system thermal estimate")
+                    sub: !battery.temperatureKnown
+                         ? qsTr("no usable thermal zone")
+                         : battery.temperatureIsEstimate
+                           ? qsTr("system-zone estimate — not a battery sensor")
+                           : qsTr("battery thermal sensor")
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 350
+                        ToolTip.text: battery.temperatureSourceText
+                    }
                 }
                 MetricCard {
                     Layout.fillWidth: true

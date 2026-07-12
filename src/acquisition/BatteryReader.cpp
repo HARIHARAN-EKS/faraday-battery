@@ -435,10 +435,6 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
         return;
     }
 
-    double validSum = 0.0;
-    int validCount = 0;
-    std::optional<double> batteryZoneTemp;
-
     for (const QVariantMap &row : rows) {
         ThermalZone zone;
         zone.instanceName = optString(row, QStringLiteral("InstanceName"));
@@ -448,13 +444,25 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
             zone.valid = thermalRawIsValid(*raw);
         }
         zone.isBatteryZone = zone.instanceName.contains(QStringLiteral("BAT"), Qt::CaseInsensitive);
-        if (zone.valid) {
-            validSum += zone.celsius;
-            ++validCount;
-            if (zone.isBatteryZone && !batteryZoneTemp.has_value())
-                batteryZoneTemp = zone.celsius;
-        }
         snapshot.thermalZones.append(zone);
+    }
+
+    resolveTemperature(snapshot);
+}
+
+void BatteryReader::resolveTemperature(BatterySnapshot &snapshot)
+{
+    double validSum = 0.0;
+    int validCount = 0;
+    std::optional<double> batteryZoneTemp;
+
+    for (const ThermalZone &zone : snapshot.thermalZones) {
+        if (!zone.valid)
+            continue;
+        validSum += zone.celsius;
+        ++validCount;
+        if (zone.isBatteryZone && !batteryZoneTemp.has_value())
+            batteryZoneTemp = zone.celsius;
     }
 
     if (batteryZoneTemp.has_value()) {
@@ -465,7 +473,7 @@ void BatteryReader::mergeThermal(BatterySnapshot &snapshot)
         // ACPI zones as a system thermal estimate, and say so.
         snapshot.temperatureC = validSum / validCount;
         snapshot.temperatureIsEstimate = true;
-    } else if (!rows.isEmpty()) {
+    } else if (!snapshot.thermalZones.isEmpty()) {
         snapshot.unavailable << QStringLiteral("MsAcpi_ThermalZoneTemperature: only stub zones present");
     } else {
         snapshot.unavailable << QStringLiteral("MsAcpi_ThermalZoneTemperature: no instances");

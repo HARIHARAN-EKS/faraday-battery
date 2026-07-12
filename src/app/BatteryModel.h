@@ -36,6 +36,13 @@ class BatteryModel : public QObject
     Q_PROPERTY(int cycleCount READ cycleCount NOTIFY snapshotChanged)
     Q_PROPERTY(double temperatureC READ temperatureC NOTIFY snapshotChanged)
     Q_PROPERTY(bool temperatureKnown READ temperatureKnown NOTIFY snapshotChanged)
+    // True when the reading is a system-zone estimate, not a battery sensor.
+    Q_PROPERTY(bool temperatureIsEstimate READ temperatureIsEstimate NOTIFY snapshotChanged)
+    Q_PROPERTY(QString temperatureSourceText READ temperatureSourceText NOTIFY snapshotChanged)
+    // Temperature ALERTS are only armed against a true battery sensor;
+    // firing thresholds against an estimate would be dishonest.
+    Q_PROPERTY(bool temperatureAlertAvailable READ temperatureAlertAvailable
+                   NOTIFY snapshotChanged)
     Q_PROPERTY(double netPowerW READ netPowerW NOTIFY snapshotChanged)
     Q_PROPERTY(bool powerKnown READ powerKnown NOTIFY snapshotChanged)
     Q_PROPERTY(double voltageV READ voltageV NOTIFY snapshotChanged)
@@ -106,6 +113,9 @@ public:
     int cycleCount() const;
     double temperatureC() const;
     bool temperatureKnown() const;
+    bool temperatureIsEstimate() const;
+    QString temperatureSourceText() const;
+    bool temperatureAlertAvailable() const;
     double netPowerW() const;
     bool powerKnown() const;
     double voltageV() const;
@@ -182,6 +192,9 @@ public:
     // Testing hooks (also used by later phases)
     void applySnapshot(const BatterySnapshot &snapshot);
     void applyReport(const PowercfgReportData &report);
+    // The exact input applySnapshot() hands to the alert manager — exposed
+    // so the estimate-gating of the temperature alert is unit-testable.
+    struct AlertInput currentAlertInput() const;
     Settings *settings() { return &m_settings; }
     Database *database() { return &m_database; }
     const BatterySnapshot &snapshot() const { return m_snapshot; }

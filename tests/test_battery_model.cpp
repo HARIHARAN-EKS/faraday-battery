@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 
+#include "app/AlertManager.h"
 #include "app/BatteryModel.h"
 
 #include <QSignalSpy>
@@ -119,6 +120,43 @@ private slots:
         QCOMPARE(model.designCapacitymWh(), qint64(42401));
         QCOMPARE(model.cycleCount(), 35);
         QCOMPARE(model.healthPercent(), 100.0);
+    }
+
+    void temperatureEstimateNeverFeedsAlerts()
+    {
+        // A system-zone ESTIMATE above any threshold must not reach the
+        // alert engine; a true battery sensor must.
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot();
+        snap.temperatureC = 60.0; // way above the 50 C default threshold
+        snap.temperatureIsEstimate = true;
+        model.applySnapshot(snap);
+
+        QVERIFY(model.temperatureKnown());
+        QVERIFY(model.temperatureIsEstimate());
+        QVERIFY(!model.temperatureAlertAvailable());
+        QVERIFY(model.temperatureSourceText().contains(QStringLiteral("estimate"),
+                                                       Qt::CaseInsensitive));
+        AlertInput gated = model.currentAlertInput();
+        QVERIFY(!gated.temperatureC.has_value());
+
+        snap.temperatureIsEstimate = false; // now a real battery sensor
+        model.applySnapshot(snap);
+        QVERIFY(model.temperatureAlertAvailable());
+        AlertInput armed = model.currentAlertInput();
+        QVERIFY(armed.temperatureC.has_value());
+        QCOMPARE(*armed.temperatureC, 60.0);
+    }
+
+    void temperatureUnknownAlertUnavailable()
+    {
+        BatteryModel model;
+        BatterySnapshot snap = chargingSnapshot();
+        snap.temperatureC.reset();
+        model.applySnapshot(snap);
+        QVERIFY(!model.temperatureKnown());
+        QVERIFY(!model.temperatureAlertAvailable());
+        QVERIFY(!model.currentAlertInput().temperatureC.has_value());
     }
 
     void powercfgWinsOnDesignCapacity()

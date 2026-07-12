@@ -143,22 +143,29 @@ void BatteryModel::applySnapshot(const BatterySnapshot &snapshot)
     if (m_calibration && snapshot.batteryPresent)
         m_calibration->update(chargePercent(), onAcPower(), snapshot.timestamp);
 
-    if (m_alerts && snapshot.batteryPresent) {
-        AlertInput input;
-        input.percent = chargePercent();
-        if (voltageV() > 0)
-            input.voltageV = voltageV();
-        if (temperatureKnown())
-            input.temperatureC = temperatureC();
-        input.charging = charging();
-        input.onAcPower = onAcPower();
-        const BatteryDevice *dev = primary();
-        input.discharging = dev ? dev->discharging.value_or(false) : false;
-        m_alerts->process(input);
-    }
+    if (m_alerts && snapshot.batteryPresent)
+        m_alerts->process(currentAlertInput());
 
     emit snapshotChanged();
     emit staticInfoChanged();
+}
+
+AlertInput BatteryModel::currentAlertInput() const
+{
+    AlertInput input;
+    input.percent = chargePercent();
+    if (voltageV() > 0)
+        input.voltageV = voltageV();
+    // Temperature feeds the alert engine ONLY when a real battery thermal
+    // sensor backs it. A system-zone estimate can sit tens of degrees away
+    // from the pack; alerting on it would be a false alarm generator.
+    if (temperatureAlertAvailable())
+        input.temperatureC = temperatureC();
+    input.charging = charging();
+    input.onAcPower = onAcPower();
+    const BatteryDevice *dev = primary();
+    input.discharging = dev ? dev->discharging.value_or(false) : false;
+    return input;
 }
 
 void BatteryModel::applyReport(const PowercfgReportData &report)
@@ -314,6 +321,29 @@ double BatteryModel::temperatureC() const
 bool BatteryModel::temperatureKnown() const
 {
     return m_snapshot.temperatureC.has_value();
+}
+
+bool BatteryModel::temperatureIsEstimate() const
+{
+    return m_snapshot.temperatureIsEstimate;
+}
+
+QString BatteryModel::temperatureSourceText() const
+{
+    if (!temperatureKnown())
+        return tr("No usable thermal zone on this machine");
+    if (m_snapshot.temperatureIsEstimate)
+        return tr("System-zone estimate — this machine exposes no battery thermal sensor");
+    for (const ThermalZone &zone : m_snapshot.thermalZones) {
+        if (zone.valid && zone.isBatteryZone)
+            return tr("Battery thermal sensor (%1)").arg(zone.instanceName);
+    }
+    return tr("Battery thermal sensor");
+}
+
+bool BatteryModel::temperatureAlertAvailable() const
+{
+    return temperatureKnown() && !m_snapshot.temperatureIsEstimate;
 }
 
 double BatteryModel::netPowerW() const

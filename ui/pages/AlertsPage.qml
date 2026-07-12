@@ -112,6 +112,21 @@ Item {
                     from: 35; to: 85
                     value: battery.settingValue("highTempThresholdC")
                     onCommitted: (v) => battery.setSetting("highTempThresholdC", Math.round(v))
+                    // Armed only against a real battery thermal sensor —
+                    // never against a system-zone estimate.
+                    enabled: battery.temperatureAlertAvailable
+                    opacity: enabled ? 1.0 : 0.45
+                }
+                Text {
+                    visible: !battery.temperatureAlertAvailable
+                    Layout.fillWidth: true
+                    Layout.topMargin: -4
+                    text: battery.temperatureKnown
+                          ? qsTr("Temperature alert disabled: this machine exposes no battery thermal sensor. The dashboard temperature is a system-zone estimate, and Faraday will not fire alerts against an estimate.")
+                          : qsTr("Temperature alert disabled: no usable thermal sensor on this machine.")
+                    color: Theme.warn
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
                 }
                 LabeledSlider {
                     label: qsTr("Low pack voltage")

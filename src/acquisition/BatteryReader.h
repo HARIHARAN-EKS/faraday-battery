@@ -69,6 +69,13 @@ public:
     // capacity from any source (VMs expose ghost instances with zeros).
     static bool snapshotHasRealBattery(const BatterySnapshot &snapshot);
 
+    // Resolves snapshot.temperatureC / temperatureIsEstimate from the
+    // already-populated snapshot.thermalZones: a valid *BAT* zone is a true
+    // battery sensor; otherwise the mean of the valid zones is a SYSTEM
+    // estimate (temperatureIsEstimate = true). Appends to
+    // snapshot.unavailable when only stub zones (or none) exist.
+    static void resolveTemperature(BatterySnapshot &snapshot);
+
 private:
     void mergeRootWmi(BatterySnapshot &snapshot);
     void mergeCimv2(BatterySnapshot &snapshot);

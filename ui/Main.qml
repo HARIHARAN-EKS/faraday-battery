@@ -53,8 +53,20 @@ ApplicationWindow {
                 RowLayout {
                     Layout.bottomMargin: 18
                     Layout.topMargin: 6
-                    spacing: 8
-                    Text { text: "⚡"; font.pixelSize: 22 }
+                    spacing: 10
+                    // Brand mark. The asset is a dark rounded tile, so it
+                    // reads correctly against both the dark and light
+                    // sidebar without a second variant.
+                    Image {
+                        source: "qrc:/icons/faraday.png"
+                        sourceSize.width: 28
+                        sourceSize.height: 28
+                        Layout.preferredWidth: 28
+                        Layout.preferredHeight: 28
+                        smooth: true
+                        mipmap: true
+                        fillMode: Image.PreserveAspectFit
+                    }
                     Text {
                         text: qsTr("Faraday")
                         color: Theme.text

@@ -1,22 +1,36 @@
-// Faraday launcher stub (field defect D2).
+// Faraday launcher stub (field defects D2 / P2).
 //
-// Problem: faraday's Qt imports are resolved by the Windows LOADER before
-// main() runs. A bare exe copied out of the portable ZIP therefore died
-// with the raw "System Error: Qt6Gui.dll was not found" dialog — nothing
-// inside that process could ever catch it, and MinGW has no MSVC-style
-// /DELAYLOAD to defer the imports.
+// Problem: the Qt application's imports are resolved by the Windows LOADER
+// before main() runs. A bare exe copied out of the portable ZIP therefore
+// died with the raw "System Error: Qt6Gui.dll was not found" dialog —
+// nothing inside that process could ever catch it, and MinGW has no
+// MSVC-style /DELAYLOAD to defer the imports.
 //
-// Fix: THIS binary is what users launch as faraday.exe. It links against
-// system DLLs only (kernel32/user32) and is statically linked against the
-// MinGW runtime, so it starts in ANY environment. It verifies the runtime
-// beside it (against the packaging-generated runtime.manifest when present,
-// or a built-in core list), then starts the real application
-// (faraday-app.exe) with loader error boxes suppressed and watches its
-// first seconds — so even a corrupted DLL yields a friendly message, never
-// a raw loader dialog.
+// Fix: THIS binary is Faraday.exe — the one thing the user clicks. It links
+// against system DLLs only (kernel32/user32) and is statically linked
+// against the MinGW runtime, so it starts in ANY environment.
+//
+// Layout (P2): the entire Qt runtime lives in an "app" subfolder next to
+// this launcher, so the top level shows only Faraday.exe and README.txt:
+//
+//   Faraday/
+//     Faraday.exe        <- this stub
+//     README.txt
+//     data/              <- user data (portable mode; created by the app)
+//     app/
+//       faraday-core.exe <- the real Qt application
+//       runtime.manifest <- every runtime file, generated at packaging time
+//       Qt6*.dll, platforms/, qml/, sqldrivers/, ...
+//
+// The launcher verifies the runtime inside app\, then starts
+// faraday-core.exe with its working directory set to app\ (so the loader
+// resolves every DLL exactly as it did in the flat layout) and with loader
+// error boxes suppressed, watching its first seconds — so even a corrupted
+// DLL yields a friendly message, never a raw loader dialog.
 //
 // AV posture: no packing, no network, no registry, no elevation. Plain
-// CreateProcess of a sibling binary, full VersionInfo, asInvoker manifest.
+// CreateProcess of a fixed-name binary in our own subfolder, full
+// VersionInfo, asInvoker manifest.
 //
 // Test hook: FARADAY_LAUNCHER_NO_UI=1 replaces the MessageBox with stderr
 // output so the negative-test suite can assert messages without modal UI.
@@ -33,8 +47,9 @@
 
 namespace {
 
-const wchar_t kAppBinary[] = L"faraday-app.exe";
-const wchar_t kManifestName[] = L"runtime.manifest";
+const wchar_t kAppSubdir[] = L"app\\";
+const wchar_t kAppBinary[] = L"app\\faraday-core.exe";
+const wchar_t kManifestName[] = L"app\\runtime.manifest";
 const wchar_t kTitle[] = L"Faraday";
 
 // Without a runtime.manifest (developer trees, where Qt resolves via
@@ -43,9 +58,9 @@ const wchar_t kTitle[] = L"Faraday";
 const wchar_t kExtractAdvice[] =
     L"Faraday must be run from its complete program folder.\r\n\r\n"
     L"If you downloaded the portable ZIP: extract the ENTIRE archive, "
-    L"then run faraday.exe from inside the extracted Faraday folder. "
-    L"Copying faraday.exe out on its own will not work — the program "
-    L"needs the files that sit next to it.\r\n\r\n"
+    L"then run Faraday.exe from inside the extracted Faraday folder. "
+    L"Copying Faraday.exe out on its own will not work — the program "
+    L"needs the 'app' folder that sits next to it.\r\n\r\n"
     L"If you used the installer: please reinstall.";
 
 struct PathBuf
@@ -64,7 +79,6 @@ void writeStderr(const wchar_t *text)
     const HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
     if (err == INVALID_HANDLE_VALUE || err == nullptr)
         return;
-    // UTF-8 encode for pipe capture.
     char utf8[4096];
     const int n = WideCharToMultiByte(CP_UTF8, 0, text, -1, utf8, sizeof(utf8) - 1,
                                       nullptr, nullptr);
@@ -125,17 +139,17 @@ bool fileExists(const PathBuf &dir, const wchar_t *relative)
     return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-// Verifies every file listed in runtime.manifest (one relative path per
-// line). Returns true when the manifest exists and was checked; missing
+// Verifies every file listed in app\runtime.manifest (one app-relative path
+// per line). Returns true when the manifest exists and was checked; missing
 // entries are reported through *firstMissing / *missingCount.
-bool checkManifest(const PathBuf &dir, wchar_t *firstMissing, size_t firstMissingCap,
-                   int *missingCount)
+bool checkManifest(const PathBuf &appDir, const PathBuf &rootDir, wchar_t *firstMissing,
+                   size_t firstMissingCap, int *missingCount)
 {
     *missingCount = 0;
     firstMissing[0] = L'\0';
 
     PathBuf manifestPath;
-    if (!joinPath(manifestPath, dir, kManifestName))
+    if (!joinPath(manifestPath, rootDir, kManifestName))
         return false;
     const HANDLE file = CreateFileW(manifestPath.data, GENERIC_READ, FILE_SHARE_READ,
                                     nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -162,7 +176,8 @@ bool checkManifest(const PathBuf &dir, wchar_t *firstMissing, size_t firstMissin
     }
     buf[bytes] = '\0';
 
-    // Parse lines (ASCII relative paths, CRLF or LF).
+    // Parse lines (ASCII relative paths, CRLF or LF). Paths are relative to
+    // the app\ directory, which is where the runtime lives.
     DWORD lineStart = 0;
     for (DWORD i = 0; i <= bytes; ++i) {
         if (i == bytes || buf[i] == '\n' || buf[i] == '\r') {
@@ -173,7 +188,7 @@ bool checkManifest(const PathBuf &dir, wchar_t *firstMissing, size_t firstMissin
                                                      MAX_PATH * 2 - 1);
                 if (wlen > 0) {
                     rel[wlen] = L'\0';
-                    if (!fileExists(dir, rel)) {
+                    if (!fileExists(appDir, rel)) {
                         if (*missingCount == 0) {
                             size_t k = 0;
                             while (rel[k] != L'\0' && k < firstMissingCap - 1) {
@@ -218,21 +233,24 @@ const wchar_t *argumentsTail()
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    PathBuf dir;
-    if (!moduleDirectory(dir))
+    PathBuf root;
+    if (!moduleDirectory(root))
         fail(kExtractAdvice, 2);
 
-    // 1. The application binary itself must be beside us (the bare-exe case).
-    if (!fileExists(dir, kAppBinary))
+    PathBuf appDir;
+    if (!joinPath(appDir, root, kAppSubdir))
         fail(kExtractAdvice, 2);
 
-    // 2. Verify the packaged runtime manifest when present; otherwise fall
-    //    back to the built-in core list only if those files are also absent
-    //    AND the spawn check below fails (developer trees resolve Qt via
-    //    PATH, so missing-beside-us alone is not proof of breakage there).
+    // 1. The application binary must exist inside app\ (the bare-exe and
+    //    missing-app-folder cases both land here).
+    if (!fileExists(root, kAppBinary))
+        fail(kExtractAdvice, 2);
+
+    // 2. Verify the packaged runtime manifest when present.
     wchar_t firstMissing[MAX_PATH * 2];
     int missingCount = 0;
-    if (checkManifest(dir, firstMissing, MAX_PATH * 2, &missingCount) && missingCount > 0) {
+    if (checkManifest(appDir, root, firstMissing, MAX_PATH * 2, &missingCount)
+        && missingCount > 0) {
         wchar_t msg[2048];
         wsprintfW(msg,
                   L"%d required program file(s) are missing (first: %s).\r\n\r\n%s",
@@ -242,11 +260,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     // 3. Start the real application with loader error boxes suppressed (the
     //    child inherits our error mode) and watch its first seconds so a
-    //    damaged runtime still ends in a friendly message.
+    //    damaged runtime still ends in a friendly message. The child's
+    //    working directory is app\, so the loader resolves every Qt DLL from
+    //    beside faraday-core.exe regardless of the caller's CWD.
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
 
     PathBuf appPath;
-    if (!joinPath(appPath, dir, kAppBinary))
+    if (!joinPath(appPath, root, kAppBinary))
         fail(kExtractAdvice, 2);
 
     wchar_t cmdLine[4096];
@@ -263,12 +283,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     ZeroMemory(&pi, sizeof(pi));
 
     if (!CreateProcessW(appPath.data, cmdLine, nullptr, nullptr, FALSE, 0, nullptr,
-                        dir.data, &si, &pi)) {
+                        appDir.data, &si, &pi)) {
         fail(kExtractAdvice, 3);
     }
     CloseHandle(pi.hThread);
 
-    // A healthy start means the app is still alive after the grace window.
     const DWORD wait = WaitForSingleObject(pi.hProcess, 4000);
     DWORD exitCode = 0;
     if (wait == WAIT_OBJECT_0 && GetExitCodeProcess(pi.hProcess, &exitCode)
@@ -276,8 +295,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         CloseHandle(pi.hProcess);
         wchar_t msg[2048];
         wsprintfW(msg,
-                  L"Faraday could not start (code 0x%08X). The program files next to "
-                  L"faraday.exe appear incomplete or damaged.\r\n\r\n%s",
+                  L"Faraday could not start (code 0x%08X). The program files in the "
+                  L"'app' folder appear incomplete or damaged.\r\n\r\n%s",
                   exitCode, kExtractAdvice);
         fail(msg, 3);
     }

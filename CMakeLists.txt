@@ -1,7 +1,7 @@
-﻿cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.21)
 
 project(Faraday
-    VERSION 1.0.4
+    VERSION 1.0.5
     DESCRIPTION "Faraday - Battery Intelligence Suite"
     LANGUAGES CXX
 )
@@ -83,6 +83,7 @@ target_link_libraries(faradaylib PUBLIC
 qt_add_executable(faraday
     src/main.cpp
     resources/faraday.rc
+    resources/icons.qrc
 )
 
 set_source_files_properties(ui/Theme.qml PROPERTIES
@@ -115,22 +116,22 @@ qt_add_translations(faraday
 
 set_target_properties(faraday PROPERTIES
     WIN32_EXECUTABLE TRUE
-    # The Qt application ships as faraday-app.exe; the faraday.exe users
-    # launch is the static stub below, which verifies the runtime first
-    # (a bare Qt exe dies in the Windows loader before main() — field
-    # defect D1/D2).
-    OUTPUT_NAME "faraday-app"
+    # The Qt application ships as app\faraday-core.exe; the Faraday.exe the
+    # user clicks is the static stub below, which verifies the runtime first
+    # (a bare Qt exe dies in the Windows loader before main() - field
+    # defects D1/D2, presentation layout P2).
+    OUTPUT_NAME "faraday-core"
 )
 
 # ---------------------------------------------------------------------------
-# Launcher stub: system DLLs only, statically linked MinGW runtime — starts
-# in ANY environment, verifies the runtime, then runs faraday-app.exe.
+# Launcher stub: system DLLs only, statically linked MinGW runtime - starts
+# in ANY environment, verifies the runtime, then runs app\faraday-core.exe.
 # ---------------------------------------------------------------------------
 add_executable(faraday_launcher WIN32
     src/launcher/launcher_main.cpp
     resources/launcher.rc
 )
-set_target_properties(faraday_launcher PROPERTIES OUTPUT_NAME "faraday")
+set_target_properties(faraday_launcher PROPERTIES OUTPUT_NAME "Faraday")
 if(NOT MSVC)
     target_link_options(faraday_launcher PRIVATE -static)
 endif()

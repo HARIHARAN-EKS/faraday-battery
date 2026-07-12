@@ -1,12 +1,15 @@
-// Faraday version-info resource, application icon and asInvoker manifest.
+// Faraday CORE application version-info resource, icon and asInvoker manifest.
+// This is the internal Qt application (faraday-core.exe) that the top-level
+// Faraday.exe launcher starts. It carries a deliberately muted icon and a
+// self-documenting description so anyone browsing app\ knows what it is.
 #include <winver.h>
 
-#define VER_FILEVERSION             1,0,4,0
-#define VER_FILEVERSION_STR         "1.0.4.0\0"
-#define VER_PRODUCTVERSION          1,0,4,0
-#define VER_PRODUCTVERSION_STR      "1.0.4\0"
+#define VER_FILEVERSION             1,0,5,0
+#define VER_FILEVERSION_STR         "1.0.5.0\0"
+#define VER_PRODUCTVERSION          1,0,5,0
+#define VER_PRODUCTVERSION_STR      "1.0.5\0"
 
-IDI_ICON1 ICON "faraday.ico"
+IDI_ICON1 ICON "faraday_core.ico"
 
 1 24 "app.manifest"
 
@@ -24,11 +27,11 @@ BEGIN
         BLOCK "040904E4"
         BEGIN
             VALUE "CompanyName",      "Faraday Project\0"
-            VALUE "FileDescription",  "Faraday - Battery Intelligence Suite\0"
+            VALUE "FileDescription",  "Faraday internal component - run Faraday.exe instead\0"
             VALUE "FileVersion",      VER_FILEVERSION_STR
-            VALUE "InternalName",     "faraday\0"
+            VALUE "InternalName",     "faraday-core\0"
             VALUE "LegalCopyright",   "Copyright (C) 2026 Faraday Project. MIT License.\0"
-            VALUE "OriginalFilename", "faraday-app.exe\0"
+            VALUE "OriginalFilename", "faraday-core.exe\0"
             VALUE "ProductName",      "Faraday Battery Intelligence Suite\0"
             VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
         END

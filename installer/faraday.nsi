@@ -4,17 +4,19 @@
 ; standard /SOLID lzma compression - the documented NSIS default choice
 ; for release installers, nothing exotic).
 ;
+; Layout (P2/P3): the install directory mirrors the portable folder --
+; Faraday.exe + README.txt at the top level, the whole Qt runtime inside
+; app\ next to faraday-core.exe. Shortcuts always point at the top-level
+; Faraday.exe, never at faraday-core.exe.
+;
 ; Heuristic-surface policy (see docs/AV_HARDENING.md):
 ;   - Per-user install (RequestExecutionLevel user) - never elevates,
 ;     matching the application's asInvoker profile.
 ;   - Modern UI 2 with the standard page flow; no silent-by-default.
-;   - FULL VersionInfo resource including OriginalFilename/InternalName
-;     (metadata-less installers score worse with generic heuristics).
-;   - No Exec / ExecShell / ExecWait of anything, anywhere - the installer
-;     copies files, writes shortcuts and the standard HKCU uninstall
-;     entry, and nothing else. No run-after-install checkbox either.
+;   - FULL VersionInfo resource including OriginalFilename/InternalName.
+;   - No Exec / ExecShell / ExecWait of anything, anywhere.
 ;   - No bundled third-party components: the payload is exactly the
-;     windeployqt output of our own build.
+;     packaged output of our own build.
 ;   - The only registry activity is the per-user uninstall entry (HKCU)
 ;     that Windows requires to list the uninstaller; the application
 ;     itself never touches the registry.
@@ -23,7 +25,7 @@
 
 !define PRODUCT_NAME "Faraday"
 !define PRODUCT_FULL_NAME "Faraday - Battery Intelligence Suite"
-!define PRODUCT_VERSION "1.0.4"
+!define PRODUCT_VERSION "1.0.5"
 !define PRODUCT_PUBLISHER "Faraday Project"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Faraday"
 
@@ -53,8 +55,9 @@ VIAddVersionKey "InternalName" "faraday-setup"
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
+; Brand icon on the installer, muted variant on the uninstaller.
 !define MUI_ICON "..\resources\faraday.ico"
-!define MUI_UNICON "..\resources\faraday.ico"
+!define MUI_UNICON "..\resources\faraday_uninst.ico"
 !define MUI_ABORTWARNING
 
 !insertmacro MUI_PAGE_WELCOME
@@ -67,9 +70,9 @@ VIAddVersionKey "InternalName" "faraday-setup"
 
 !insertmacro MUI_LANGUAGE "English"
 
-; Post-copy payload verification (D2): the install must never complete
-; with a partial runtime - that is exactly the state that produced the
-; field loader failure.
+; Post-copy payload verification: the install must never complete with a
+; partial runtime - that is exactly the state that produced the field
+; loader failure.
 !macro VerifyInstalled FILE
   IfFileExists "$INSTDIR\${FILE}" +3 0
     MessageBox MB_OK|MB_ICONSTOP "Installation is incomplete: ${FILE} is missing.$\r$\nPlease re-run the installer."
@@ -79,25 +82,35 @@ VIAddVersionKey "InternalName" "faraday-setup"
 ; ---- Install ----------------------------------------------------------
 Section "Faraday (required)"
   SectionIn RO
+
+  ; Top level: the launcher and the readme, nothing else.
   SetOutPath "$INSTDIR"
-  File /r "..\dist\Faraday\*.*"
+  File "..\dist\Faraday\Faraday.exe"
+  File "..\dist\Faraday\README.txt"
+
+  ; Everything else, out of sight, in app\.
+  SetOutPath "$INSTDIR\app"
+  File /r "..\dist\Faraday\app\*.*"
+
+  ; Working directory for the shortcuts must be the install root.
+  SetOutPath "$INSTDIR"
 
   ; Verify the critical payload actually landed.
-  !insertmacro VerifyInstalled "faraday.exe"
-  !insertmacro VerifyInstalled "faraday-app.exe"
-  !insertmacro VerifyInstalled "runtime.manifest"
-  !insertmacro VerifyInstalled "Qt6Core.dll"
-  !insertmacro VerifyInstalled "Qt6Gui.dll"
-  !insertmacro VerifyInstalled "Qt6Qml.dll"
-  !insertmacro VerifyInstalled "Qt6Quick.dll"
-  !insertmacro VerifyInstalled "platforms\qwindows.dll"
-  !insertmacro VerifyInstalled "sqldrivers\qsqlite.dll"
+  !insertmacro VerifyInstalled "Faraday.exe"
+  !insertmacro VerifyInstalled "README.txt"
+  !insertmacro VerifyInstalled "app\faraday-core.exe"
+  !insertmacro VerifyInstalled "app\runtime.manifest"
+  !insertmacro VerifyInstalled "app\Qt6Core.dll"
+  !insertmacro VerifyInstalled "app\Qt6Gui.dll"
+  !insertmacro VerifyInstalled "app\Qt6Qml.dll"
+  !insertmacro VerifyInstalled "app\Qt6Quick.dll"
+  !insertmacro VerifyInstalled "app\platforms\qwindows.dll"
+  !insertmacro VerifyInstalled "app\sqldrivers\qsqlite.dll"
 
-  ; Start-menu shortcuts. SetOutPath above also fixes each shortcut's
-  ; "Start in" directory to $INSTDIR, so the launcher always runs with the
-  ; correct working directory beside its runtime.
+  ; Start-menu shortcuts -> ALWAYS the top-level launcher, working
+  ; directory = install root (SetOutPath above).
   CreateDirectory "$SMPROGRAMS\Faraday"
-  CreateShortCut "$SMPROGRAMS\Faraday\Faraday.lnk" "$INSTDIR\faraday.exe"
+  CreateShortCut "$SMPROGRAMS\Faraday\Faraday.lnk" "$INSTDIR\Faraday.exe" "" "$INSTDIR\Faraday.exe" 0
   CreateShortCut "$SMPROGRAMS\Faraday\Uninstall Faraday.lnk" "$INSTDIR\uninstall.exe"
 
   ; Uninstaller + per-user Apps entry (HKCU only; the app itself never
@@ -106,7 +119,7 @@ Section "Faraday (required)"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${PRODUCT_FULL_NAME}"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
-  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\faraday.exe"
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\Faraday.exe"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
   WriteRegStr HKCU "${UNINST_KEY}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
   WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
@@ -128,6 +141,11 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Faraday\Uninstall Faraday.lnk"
   RMDir "$SMPROGRAMS\Faraday"
 
+  ; app\ (the whole runtime) and the top level, completely.
+  RMDir /r "$INSTDIR\app"
+  Delete "$INSTDIR\Faraday.exe"
+  Delete "$INSTDIR\README.txt"
+  Delete "$INSTDIR\uninstall.exe"
   RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "${UNINST_KEY}"
 

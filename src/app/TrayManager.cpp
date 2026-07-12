@@ -11,10 +11,15 @@ namespace faraday {
 
 namespace {
 
-// Battery glyph drawn at runtime; avoids shipping a raster asset for the
-// tray and stays crisp at any DPI.
+// The brand mark, with a runtime-drawn battery glyph as a fallback for
+// builds where the icon resource is unavailable (e.g. test binaries that
+// link the library without the QML/resource module).
 QIcon makeTrayIcon()
 {
+    const QIcon brand(QStringLiteral(":/icons/faraday.png"));
+    if (!brand.isNull())
+        return brand;
+
     QPixmap pixmap(64, 64);
     pixmap.fill(Qt::transparent);
     QPainter p(&pixmap);

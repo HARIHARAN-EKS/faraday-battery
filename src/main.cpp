@@ -3,6 +3,7 @@
 #include "app/TrayManager.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QTranslator>
@@ -14,8 +15,11 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Faraday"));
     app.setOrganizationName(QStringLiteral("Faraday Project"));
-    app.setApplicationVersion(QStringLiteral("1.0.3"));
+    app.setApplicationVersion(QStringLiteral("1.0.5"));
     app.setQuitOnLastWindowClosed(false); // tray keeps us alive
+    // Window + taskbar icon (the brand mark; a dark rounded tile that reads
+    // on both light and dark shells).
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/faraday.png")));
 
     faraday::BatteryModel model;
     // Portable ZIP: a portable.txt marker next to the exe keeps all data

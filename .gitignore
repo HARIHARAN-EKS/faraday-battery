@@ -65,3 +65,6 @@ settings.json
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Raw screenshot staging (the published copies live in docs/images/)
+screenshots/

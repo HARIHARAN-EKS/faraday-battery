@@ -41,9 +41,9 @@ ReportInput makeReportInput()
     input.appVersion = QStringLiteral("0.1.0");
     input.generatedAt = QDateTime(QDate(2026, 7, 12), QTime(10, 0));
     input.batteryName = QStringLiteral("AE03041");
-    input.manufacturer = QStringLiteral("Hewlett-Packard");
+    input.manufacturer = QStringLiteral("ACME Corp");
     input.chemistry = QStringLiteral("LIon");
-    input.serialNumber = QStringLiteral("32872 08/21/2025");
+    input.serialNumber = QStringLiteral("SN-TEST-0001");
     input.healthPercent = 94.3;
     input.wearPercent = 5.7;
     input.cycleCount = 35;
@@ -135,7 +135,7 @@ private slots:
         QVERIFY(html.startsWith(QStringLiteral("<!DOCTYPE html>")));
         QVERIFY(html.contains(QStringLiteral("94.3")));
         QVERIFY(html.contains(QStringLiteral("Excellent")));
-        QVERIFY(html.contains(QStringLiteral("Hewlett-Packard")));
+        QVERIFY(html.contains(QStringLiteral("ACME Corp")));
         QVERIFY(html.contains(QStringLiteral("<svg")));       // inline chart
         QVERIFY(html.contains(QStringLiteral("Detail one")));
         QVERIFY(html.contains(QStringLiteral("Insight one")));

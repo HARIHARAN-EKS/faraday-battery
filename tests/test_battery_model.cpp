@@ -184,10 +184,10 @@ private slots:
         BatteryModel model;
         BatterySnapshot snap = chargingSnapshot();
         BatteryDevice &dev = snap.batteries[0];
-        dev.manufacturer = QStringLiteral("Hewlett-Packard");
-        dev.serialNumber = QStringLiteral("32872 08/21/2025");
+        dev.manufacturer = QStringLiteral("ACME Corp");
+        dev.serialNumber = QStringLiteral("SN-TEST-0001");
         dev.chemistry = QStringLiteral("Lithium-ion");
-        dev.uniqueId = QStringLiteral("32872 08/21/2025Hewlett-PackardPrimary");
+        dev.uniqueId = QStringLiteral("SN-TEST-0001ACME-CorpPrimary");
         dev.manufactureDate.clear(); // pack reports no date
         dev.fieldSources.insert(QStringLiteral("manufacturer"),
                                 QStringLiteral("BatteryStaticData"));
@@ -214,7 +214,7 @@ private slots:
         const QVariantMap mfr = byField.value(QStringLiteral("Manufacturer"));
         QVERIFY(mfr.value(QStringLiteral("available")).toBool());
         QCOMPARE(mfr.value(QStringLiteral("value")).toString(),
-                 QStringLiteral("Hewlett-Packard"));
+                 QStringLiteral("ACME Corp"));
         QCOMPARE(mfr.value(QStringLiteral("source")).toString(),
                  QStringLiteral("BatteryStaticData"));
 
@@ -227,7 +227,7 @@ private slots:
         const QVariantMap serial = byField.value(QStringLiteral("Serial number"));
         QVERIFY(serial.value(QStringLiteral("available")).toBool());
         QCOMPARE(serial.value(QStringLiteral("value")).toString(),
-                 QStringLiteral("32872 08/21/2025"));
+                 QStringLiteral("SN-TEST-0001"));
     }
 
     void staticInfoFallsBackToPowercfg()
@@ -243,8 +243,8 @@ private slots:
         report.ok = true;
         PowercfgReportData::BatteryInfo info;
         info.id = QStringLiteral("Primary");
-        info.manufacturer = QStringLiteral("Hewlett-Packard");
-        info.serialNumber = QStringLiteral("32872 08/21/2025");
+        info.manufacturer = QStringLiteral("ACME Corp");
+        info.serialNumber = QStringLiteral("SN-TEST-0001");
         info.chemistry = QStringLiteral("LIon");
         info.designCapacitymWh = 42401;
         report.batteries.append(info);
@@ -257,7 +257,7 @@ private slots:
         }
         QCOMPARE(byField.value(QStringLiteral("Manufacturer"))
                      .value(QStringLiteral("value")).toString(),
-                 QStringLiteral("Hewlett-Packard"));
+                 QStringLiteral("ACME Corp"));
         QCOMPARE(byField.value(QStringLiteral("Manufacturer"))
                      .value(QStringLiteral("source")).toString(),
                  QStringLiteral("powercfg"));

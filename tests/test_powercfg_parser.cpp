@@ -16,7 +16,7 @@ private slots:
         QCOMPARE(data.batteries.size(), 1);
         const auto &b = data.batteries.first();
         QCOMPARE(b.id, QStringLiteral("Primary"));
-        QCOMPARE(b.manufacturer, QStringLiteral("Hewlett-Packard"));
+        QCOMPARE(b.manufacturer, QStringLiteral("ACME Corp"));
         QCOMPARE(b.chemistry, QStringLiteral("LIon"));
         QCOMPARE(b.designCapacitymWh.value_or(-1), qint64(42401));
         QCOMPARE(b.fullChargeCapacitymWh.value_or(-1), qint64(40000));

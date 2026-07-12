@@ -224,7 +224,7 @@ private slots:
         BatteryModel model;
         BatterySnapshot snap = msiLikeSnapshot();
         snap.batteries[0].name = QStringLiteral("BIF0_9"); // raw ACPI object id
-        snap.batteries[0].uniqueId = QStringLiteral("MSIBIF0_9");
+        snap.batteries[0].uniqueId = QStringLiteral("ACMEBIF0_9");
         model.applySnapshot(snap);
 
         QHash<QString, QVariantMap> byField;
@@ -243,7 +243,7 @@ private slots:
             const QVariantMap m = v.toMap();
             if (m.value(QStringLiteral("value")).toString() == QLatin1String("BIF0_9"))
                 rawNameInDrawer = true;
-            if (m.value(QStringLiteral("value")).toString() == QLatin1String("MSIBIF0_9"))
+            if (m.value(QStringLiteral("value")).toString() == QLatin1String("ACMEBIF0_9"))
                 rawUidInDrawer = true;
         }
         QVERIFY(rawNameInDrawer);
@@ -269,7 +269,7 @@ private slots:
     void looksLikeAcpiIdentifierHeuristic()
     {
         QVERIFY(BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("BIF0_9")));
-        QVERIFY(BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("MSIBIF0_9")));
+        QVERIFY(BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("ACMEBIF0_9")));
         QVERIFY(BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("BAT1")));
         QVERIFY(!BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("Primary")));
         QVERIFY(!BatteryModel::looksLikeAcpiIdentifier(QStringLiteral("Smart Battery")));

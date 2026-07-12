@@ -96,7 +96,7 @@ private slots:
 
         BatteryDevice dev;
         dev.instanceName = QStringLiteral("ACPI\\PNP0C0A\\1_0");
-        dev.manufacturer = QStringLiteral("Hewlett-Packard");
+        dev.manufacturer = QStringLiteral("ACME Corp");
         dev.designedCapacitymWh = 42401;
         QVERIFY2(db.upsertStatic(dev, 1000), qPrintable(db.lastError()));
 

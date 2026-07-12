@@ -205,14 +205,14 @@ private slots:
         QVariantMap row;
         row.insert(QStringLiteral("InstanceName"), QStringLiteral("ACPI\\PNP0C0A\\1_0"));
         row.insert(QStringLiteral("DesignedCapacity"), 42581u);
-        row.insert(QStringLiteral("ManufactureName"), QStringLiteral("Hewlett-Packard"));
+        row.insert(QStringLiteral("ManufactureName"), QStringLiteral("ACME Corp"));
 
         // (a) First success: cache filled, snapshot populated.
         BatterySnapshot s1;
         reader.applyStaticDataResult(s1, true, { row }, QString());
         QCOMPARE(reader.staticCache().size(), 1);
         QCOMPARE(s1.batteries.size(), 1);
-        QCOMPARE(s1.batteries.first().manufacturer, QStringLiteral("Hewlett-Packard"));
+        QCOMPARE(s1.batteries.first().manufacturer, QStringLiteral("ACME Corp"));
         QVERIFY(s1.unavailable.isEmpty());
 
         // (b) Transient 0x80041001-style failure: cache reused, identity

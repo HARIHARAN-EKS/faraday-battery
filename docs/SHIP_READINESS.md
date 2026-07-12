@@ -37,7 +37,7 @@ forced to a captured stderr channel (`QT_FORCE_STDERR_LOGGING=1`):
 | Charge | 93 % reported vs 93.6 % computed → drift 0.6 %, below the 5 % calibration threshold | BatteryStatus + Win32_Battery |
 | Power | −14.6 W discharging, 12.69 V | BatteryStatus |
 | Cycles | 35 | BatteryCycleCount |
-| Identity | Hewlett-Packard · 32872 08/21/2025 · Lithium-ion (FourCC "Lion") | BatteryStaticData |
+| Identity | Hewlett-Packard · SN-TEST-0001 · Lithium-ion (FourCC "Lion") | BatteryStaticData |
 | Manufacture date | all-wildcard CIM datetime → **"Not reported by this hardware"** | honest-absent state intact |
 | Temperature | no `*BAT*` zone; TZ1 stub (0.05 °C) filtered; mean of TZ0/TZ01 shown as **system-zone estimate**; **temperature alert disabled and greyed with reason** | intact |
 | Firmware charge cap | Lenovo_BiosSetting absent → section hidden | intact |

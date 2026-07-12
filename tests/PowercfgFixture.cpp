@@ -10,8 +10,8 @@ const char kSampleBatteryReportXml[] = R"(<?xml version="1.0" encoding="utf-8"?>
   <Batteries>
     <Battery>
       <Id>Primary</Id>
-      <Manufacturer>Hewlett-Packard</Manufacturer>
-      <SerialNumber>32872 08/21/2025</SerialNumber>
+      <Manufacturer>ACME Corp</Manufacturer>
+      <SerialNumber>SN-TEST-0001</SerialNumber>
       <ManufactureDate></ManufactureDate>
       <Chemistry>LIon</Chemistry>
       <LongTerm>1</LongTerm>

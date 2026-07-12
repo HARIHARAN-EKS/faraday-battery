@@ -59,12 +59,17 @@ C:\Qt\6.8.2\mingw_64\bin\windeployqt.exe --release --compiler-runtime `
 Remove-Item dist\Faraday\sqldrivers\qsqlmimer.dll, `
     dist\Faraday\sqldrivers\qsqlodbc.dll, dist\Faraday\sqldrivers\qsqlpsql.dll
 
-# 2. Portable ZIP
-Compress-Archive dist\Faraday dist\Faraday-1.0.1-portable-win64.zip
-
-# 3. Installer (per-user, no elevation)
+# 2. Installer (per-user, no elevation) — build BEFORE staging the
+#    portable marker: the installer payload must stay marker-free.
 & 'C:\Program Files (x86)\NSIS\makensis.exe' installer\faraday.nsi
-#  -> dist\Faraday-1.0.1-setup-win64.exe
+#  -> dist\Faraday-1.0.2-setup-win64.exe
+
+# 3. Portable ZIP — stage a copy WITH the portable.txt marker (which
+#    switches data storage to <exeDir>\data; see docs\PORTABLE.md).
+New-Item -ItemType Directory -Force $env:TEMP\zipstage | Out-Null
+Copy-Item -Recurse dist\Faraday $env:TEMP\zipstage\Faraday
+Set-Content "$env:TEMP\zipstage\Faraday\portable.txt" "Faraday portable mode marker"
+Compress-Archive "$env:TEMP\zipstage\Faraday" dist\Faraday-1.0.2-portable-win64.zip
 ```
 
 Release rules (see AV_HARDENING.md): plain Release build, no packer, no

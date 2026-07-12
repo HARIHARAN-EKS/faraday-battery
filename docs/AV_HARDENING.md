@@ -60,18 +60,72 @@ when no root object exists.
 - **Unsigned binary** — the single biggest factor, unavoidable without a
   certificate.
 
-## VirusTotal guidance
+## Measured VirusTotal results — release 1.0.1 (2026-07-12)
 
-Before distributing a build:
+The prediction above was tested against reality. Full details, hashes and
+links: [VIRUSTOTAL_BASELINE.md](VIRUSTOTAL_BASELINE.md).
+
+| Artifact | Result |
+|---|---|
+| `faraday.exe` (payload) | **0 / 70 — clean, no vendor flagged it** |
+| all 102 files dropped by the installer | **0 detections on every file** |
+| `Faraday-1.0.1-setup-win64.exe` (NSIS wrapper) | **1 / 69** — Trapmine only |
+
+The single detection was **Trapmine: `Malicious.moderate.ml.score`** — by
+its own name a machine-learning score bucket, not a named malware family,
+and corroborated by none of the other 68 engines (Microsoft, Kaspersky,
+BitDefender, ESET, Sophos, CrowdStrike, Elastic all clean). Classification:
+**generic ML false positive on the unsigned NSIS installer wrapper**. The
+application itself and every byte it installs are measurably clean.
+
+### Mitigations applied in 1.0.2 (legitimate build hygiene only)
+
+The response is heuristic-surface reduction, never evasion — no packing,
+no signature games, nothing hidden:
+
+1. **Full VersionInfo on the installer** including `OriginalFilename` and
+   `InternalName` (both were missing in 1.0.1) — metadata-less installers
+   score worse with generic heuristics.
+2. **Modern UI 2** with the standard welcome → directory → install →
+   finish flow (1.0.1 used the bare classic dialog set).
+3. **Explicit modern manifests**: `ManifestDPIAware true`,
+   `ManifestSupportedOS all`.
+4. **Zero process execution**: the installer contains no `Exec`,
+   `ExecShell` or `ExecWait` of anything — it copies files, writes
+   shortcuts and the HKCU uninstall entry, nothing else. There is
+   deliberately no "run Faraday now" checkbox.
+5. **Richer, standard Apps & features metadata**: `QuietUninstallString`
+   and `EstimatedSize` added to the HKCU entry.
+6. **Stock toolchain confirmed**: unmodified NSIS 3.12 release stubs,
+   standard `/SOLID lzma` compression (the documented NSIS default choice —
+   the high-entropy overlay is inherent to any compressed payload).
+7. **Proper branding**: product icon on installer + uninstaller,
+   `BrandingText` with name and version.
+8. **A guaranteed-clean distribution path**: the portable ZIP
+   ([PORTABLE.md](PORTABLE.md)) contains no installer stub at all — its
+   payload scanned 0/70. It is the recommended download for anyone whose
+   AV objects to the installer.
+
+### The structural limit — stated plainly
+
+An **unsigned** installer stub will always carry some residual
+generic-heuristic risk: reputation systems key on code signatures, and no
+code-signing certificate is available to this project. Everything listed
+above is the complete set of free, honest mitigations; beyond it, the
+false-positive surface of the installer **cannot be materially improved
+without a paid certificate** (OV/EV signing or Azure Trusted Signing).
+Users who cannot accept that residual risk should use the portable ZIP,
+whose contents are individually verified clean.
+
+## Scan protocol for future releases
 
 1. Upload both `Faraday-<ver>-setup-win64.exe` and the portable ZIP's
    `faraday.exe` to <https://www.virustotal.com>.
-2. Expect 0 detections from major engines; 1–3 hits from low-reputation
-   engines ("ML/heuristic", "not-a-virus", "unsafe") are the normal unsigned-
-   binary noise level. Investigate anything from Microsoft, Kaspersky,
-   Bitdefender, ESET or Sophos seriously before shipping.
-3. Record the analysis link in the release notes so users can verify the exact
-   hashes they downloaded.
+2. Compare against the recorded baseline (VIRUSTOTAL_BASELINE.md): expect
+   payload 0/N; installer 0–1/N with only generic/ML labels. Escalate only
+   on a major-engine hit, >3 engines, or a specific named family.
+3. Record the analysis links + hashes in the release notes and update the
+   baseline document.
 
 ## If a user reports a flag
 

@@ -3,6 +3,36 @@
 All notable changes to Faraday are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com); versioning: SemVer.
 
+## [1.0.2] — 2026-07-12
+
+AV false-positive response round, driven by measured VirusTotal results
+for 1.0.1: application exe **0/70 (clean)**, all 102 installed files
+**0 detections**, installer wrapper 1/69 (Trapmine
+`Malicious.moderate.ml.score` — a generic ML bucket, no named family).
+Baseline with hashes: docs/VIRUSTOTAL_BASELINE.md.
+
+### Added
+- **Portable mode** — a `portable.txt` marker beside `faraday.exe` (shipped
+  in the ZIP) keeps all settings and history in an app-local `data` folder,
+  so the app runs from any path — USB drives and folders with spaces
+  included — with zero install and zero registry/AppData footprint.
+  Defaults now persist on first run so the folder is complete immediately.
+  The ZIP is the documented, recommended channel for anyone whose AV
+  objects to the installer (docs/PORTABLE.md); 16th test suite covers it.
+- **docs/VIRUSTOTAL_BASELINE.md** — verbatim scan baseline (hashes, vendor,
+  signature name, PE metadata, comparison protocol).
+- **docs/FALSE_POSITIVE_RESPONSE.md** — factual page for users and vendors
+  with hashes, links and FP-reporting instructions.
+
+### Changed
+- **Installer heuristic-surface reduction** (hygiene only — no packing, no
+  evasion, still unsigned and says so): Modern UI 2 standard page flow;
+  full VersionInfo now including `OriginalFilename`/`InternalName`;
+  `ManifestDPIAware` + `ManifestSupportedOS all`; branding text; richer
+  standard HKCU uninstall metadata (`QuietUninstallString`,
+  `EstimatedSize`); confirmed zero `Exec`/`ExecShell` anywhere; stock
+  NSIS 3.12 stubs with standard `/SOLID lzma`.
+
 ## [1.0.1] — 2026-07-12
 
 Verification & hardening round.

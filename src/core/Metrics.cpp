@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QtMath>
 #include <algorithm>
+#include <cmath>
 
 namespace faraday {
 namespace metrics {
@@ -112,6 +113,10 @@ RegressionResult linearRegression(const QVector<QPointF> &points)
 
     double sumX = 0, sumY = 0;
     for (const QPointF &p : points) {
+        // A single NaN/inf sample would otherwise poison every sum and
+        // still exit through the "valid" path (NaN comparisons are false).
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y()))
+            return result;
         sumX += p.x();
         sumY += p.y();
     }
@@ -162,7 +167,9 @@ RegressionResult degradationCurve(const QList<QPair<QDate, double>> &history)
 
     const QDate origin = history.first().first;
     for (const auto &entry : history) {
-        if (!entry.first.isValid() || entry.second <= 0.0)
+        // NaN compares false against <= 0.0, so the finiteness check must
+        // be explicit or a NaN capacity would reach the regression.
+        if (!entry.first.isValid() || !std::isfinite(entry.second) || entry.second <= 0.0)
             continue;
         points.append(QPointF(static_cast<double>(origin.daysTo(entry.first)), entry.second));
     }
@@ -173,6 +180,10 @@ std::optional<QDate> endOfLifeProjection(const QList<QPair<QDate, double>> &hist
                                          double designmWh,
                                          double thresholdPercent)
 {
+    // Non-finite inputs would flow through to a static_cast<qint64>(NaN)
+    // in addDays (undefined behavior); reject them up front.
+    if (!std::isfinite(designmWh) || !std::isfinite(thresholdPercent))
+        return std::nullopt;
     if (designmWh <= 0.0 || thresholdPercent <= 0.0 || history.isEmpty())
         return std::nullopt;
 

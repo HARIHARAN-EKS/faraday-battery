@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QIcon>
+#include <QLocale>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QTranslator>
@@ -30,13 +31,31 @@ int main(int argc, char *argv[])
         faraday::PortableMode::dataDirFor(QCoreApplication::applicationDirPath()));
 
     // English is the source language; other languages load from the
-    // embedded :/i18n resources when their .qm ships.
+    // embedded :/i18n resources. Right-to-left languages (Arabic) also
+    // mirror the layout. Switching language in Settings applies live.
     QTranslator translator;
-    const QString language = model.settings()->language();
-    if (language != QLatin1String("en")
-        && translator.load(QStringLiteral(":/i18n/faraday_%1").arg(language))) {
-        app.installTranslator(&translator);
-    }
+    const QLocale systemLocale; // restored when switching back to English
+    const auto applyLanguage = [&](const QString &language) {
+        QCoreApplication::removeTranslator(&translator);
+        const bool translated = language != QLatin1String("en")
+            && translator.load(QStringLiteral(":/i18n/faraday_%1").arg(language));
+        // Arabic uses the ar_AE locale: Arabic month names with Western
+        // digits, so spin boxes and dates match the numbers the rest of the
+        // UI prints (plain "ar" would mix in Arabic-Indic digits).
+        const QLocale uiLocale = language == QLatin1String("ar")
+            ? QLocale(QLocale::Arabic, QLocale::UnitedArabEmirates)
+            : QLocale(language);
+        if (translated) {
+            QCoreApplication::installTranslator(&translator);
+            QLocale::setDefault(uiLocale);
+        } else {
+            QLocale::setDefault(systemLocale);
+        }
+        app.setLayoutDirection(translated && uiLocale.textDirection() == Qt::RightToLeft
+                                   ? Qt::RightToLeft
+                                   : Qt::LeftToRight);
+    };
+    applyLanguage(model.settings()->language());
 
     faraday::TrayManager tray;
     QObject::connect(&model, &faraday::BatteryModel::alertRaised,
@@ -47,7 +66,7 @@ int main(int argc, char *argv[])
                      &model, &faraday::BatteryModel::sampleNow);
     QObject::connect(&model, &faraday::BatteryModel::snapshotChanged, &tray, [&]() {
         if (model.batteryPresent() && model.chargePercent() >= 0) {
-            tray.setTooltip(QStringLiteral("Faraday — %1% · %2")
+            tray.setTooltip(QCoreApplication::translate("main", "Faraday — %1% · %2")
                                 .arg(QString::number(model.chargePercent(), 'f', 0),
                                      model.statusText()));
         }
@@ -60,6 +79,12 @@ int main(int argc, char *argv[])
                      &app, []() { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     engine.loadFromModule("Faraday", "Main");
+
+    QObject::connect(&model, &faraday::BatteryModel::languageChanged, &app, [&]() {
+        applyLanguage(model.language());
+        tray.retranslate();
+        engine.retranslate();
+    });
 
     // objectCreationFailed does NOT fire when a QML module *plugin* fails to
     // load (e.g. a missing Qt DLL in a broken deployment) — the engine just
